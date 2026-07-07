@@ -1,0 +1,235 @@
+# 🔬 Autonomous AI Research Analyst — Project Reference
+
+> This file is meant to live in your repo (e.g. `.github/copilot-instructions.md`) so that VS Code Copilot / Copilot Chat has full context on what you're building, the architecture, and the conventions to follow while you write the code from scratch.
+
+---
+
+## 🎯 What This Project Is
+
+A multi-agent AI system that autonomously researches any topic and produces a comprehensive, cited report. Instead of one LLM call, a team of specialized agents plans the research, searches multiple sources, reads and extracts facts, cross-references them, critiques the draft for quality, and only then writes the final report — looping back to re-research if the critique score is too low.
+
+**Core differentiators vs. a basic single-agent RAG project:**
+
+| Feature | Basic Version | This Project |
+|---|---|---|
+| Agents | 2–3 simple agents | 6 specialized agents with distinct roles |
+| Orchestration | Sequential chain | Stateful graph (LangGraph) with conditional edges |
+| Reflection | None | Critic agent with iterative refinement loop |
+| Memory | Short-term only | Hybrid (short-term + long-term + episodic) |
+| Observability | Print statements | Structured logs / Langfuse tracing + custom metrics |
+| Evaluation | Manual | Automated RAGAS + custom metrics |
+| Cost Control | Ignored | Per-agent token/call tracking to stay within free-tier limits |
+| Human-in-Loop | None | Approval checkpoints at critical steps |
+| UI | None / basic | Streamlit app with live agent progress |
+
+**Note:** This project is built entirely with free-tier resources — no paid OpenAI or Claude API usage. LLM inference uses **Groq's free tier** as primary and **Google Gemini's free tier** as fallback, vector storage uses **Chroma Cloud** (hosted, free tier), and search uses free/no-key APIs.
+
+---
+
+## 🏗️ System Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│           STREAMLIT UI (single app)          │
+│     Shows live agent progress + report       │
+└───────────────────────┬───────────────────────┘
+                        │
+┌───────────────────────▼───────────────────────┐
+│      ORCHESTRATOR (LangGraph State Machine)   │
+│                                               │
+│   ┌─────────┐   ┌──────────┐   ┌──────────┐   │
+│   │ Planner │──▶│ Searcher │──▶│  Reader  │   │
+│   └─────────┘   └──────────┘   └────┬─────┘   │
+│        ▲                             │         │
+│        │        ┌──────────┐   ┌────▼──────┐  │
+│        └────────│  Critic  │◀──│Synthesizer│  │
+│                 └──────────┘   └────┬──────┘  │
+│                                     │          │
+│                               ┌─────▼────┐    │
+│                               │  Writer  │    │
+│                               └──────────┘    │
+└─────────────┬─────────────────────────────────┘
+             │
+   ┌─────────┼──────────┐
+   ▼         ▼          ▼
+┌──────┐ ┌──────────────┐ ┌──────────┐
+│Redis │ │ Chroma Cloud │ │Local logs│
+│(STM) │ │  (Vectors)   │ │/Langfuse │
+└──────┘ └──────────────┘ └──────────┘
+```
+
+### 🤖 The 6 Agents
+
+| Agent | Role | Key Responsibilities |
+|---|---|---|
+| 🧠 **Planner** | Strategy | Decomposes the query into 5–10 sub-questions, creates the research plan, decides depth |
+| 🔍 **Searcher** | Discovery | Queries free search APIs (DuckDuckGo, Google Scholar via `scholarly`) and academic APIs, scrapes sites with Playwright |
+| 📖 **Reader** | Comprehension | Chunks content, extracts key facts, stores in vector DB with metadata |
+| 🧪 **Synthesizer** | Analysis | Cross-references sources, identifies contradictions, builds a knowledge graph |
+| 🕵️ **Critic** | Quality Control | Fact-checks claims, scores relevance/accuracy, triggers re-research if quality is low |
+| ✍️ **Writer** | Output | Generates the structured report with citations and an executive summary |
+
+**Reflection loop:** the Critic scores the draft on factuality, completeness, and citation quality. If the score is below threshold (e.g. 0.8) and iteration count < 3, control routes back to the Searcher for another pass; otherwise it proceeds to the Writer.
+
+---
+
+## 🧬 Memory System
+
+| Memory Type | Storage | Purpose |
+|---|---|---|
+| Short-Term | Redis (`REDIS_URL`) | Current session state, agent scratchpads |
+| Long-Term / Episodic | Chroma Cloud | Vector store of past research findings + metadata (topics, timestamps), reusable across sessions |
+
+> **Assumption:** dropped the separate PostgreSQL long-term store from the earlier version since it's not in your `.env` — long-term context now lives as metadata alongside vectors in Chroma Cloud. Say the word if you'd rather add Postgres back for structured user/session data.
+
+---
+
+## 🛠️ Tools Agents Can Use (all free/no paid API keys)
+
+- **Web Search:** `duckduckgo-search` (DuckDuckGo, free, no API key, no rate-limit charges) + `scholarly` for Google Scholar
+- **Scraping:** Playwright (free, open source) with stealth mode for JS-heavy sites
+- **Academic:** Semantic Scholar API + arXiv API (both free, no key required)
+- **PDFs:** PyMuPDF + Unstructured.io (open-source/free tier) for parsing
+- **Embeddings:** Local `sentence-transformers` models (e.g. `all-MiniLM-L6-v2`) — no API calls, runs on CPU
+- **Code Execution:** Sandboxed local Python for data analysis, if needed
+
+---
+
+## 🧠 LLM Setup (no OpenAI / no Claude)
+
+- **Primary:** [Groq](https://groq.com) API (`GROQ_API_KEY`) — free tier, extremely fast inference on open models (e.g. Llama 3.1, Llama 3.3, Mixtral).
+- **Fallback:** [Google Gemini](https://ai.google.dev) API (`GEMINI_API_KEY`) — free tier, used automatically if Groq errors out or is rate-limited.
+- Agents talk to the LLM through a single thin wrapper (`llm/client.py`) that tries Groq first and falls back to Gemini on failure/rate-limit, so agent code never needs to know which provider served the call.
+- Use a smaller/faster Groq model for high-frequency agents like Searcher/Reader, and a stronger model for Synthesizer/Critic/Writer where reasoning quality matters more.
+- Both are free-tier hosted APIs (not local), so build in simple retry/backoff and respect each provider's rate limits.
+
+---
+
+## 📊 Observability & Evaluation
+
+- **Tracing:** Structured local logging (JSON lines per agent call) or self-hosted [Langfuse](https://langfuse.com) (open-source, free to self-host) instead of LangSmith
+- **Custom metrics** tracked per agent: call count, latency, token usage
+- **RAGAS** metrics: faithfulness, answer relevancy, context precision — using Groq (with Gemini fallback) as the judge LLM
+- **Custom metrics:** citation accuracy, source diversity, hallucination rate
+- **Resource controls:** per-query call/token counters to keep Groq/Gemini free-tier usage within rate limits
+
+---
+
+## 🛡️ Guardrails
+
+- PII scrubbing before sending content to the LLM
+- Prompt injection detection on scraped/search content
+- Max 3 reflection iterations to prevent infinite loops
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| Orchestration | LangGraph, LangChain |
+| LLMs | **Groq** (primary, free tier), **Google Gemini** (fallback, free tier) |
+| Embeddings | `sentence-transformers` (local, free) or Gemini embeddings |
+| Memory | Redis (short-term), Chroma Cloud (vectors + long-term/episodic) |
+| Tools | `duckduckgo-search`, `scholarly`, Playwright, Semantic Scholar API, arXiv API, PyMuPDF |
+| Backend | Python, Pydantic |
+| UI | **Streamlit** |
+| Observability | Local structured logs / self-hosted Langfuse |
+| Evaluation | RAGAS (Groq/Gemini as judge), custom metrics suite |
+
+---
+
+## 📁 Suggested Folder Structure
+
+```
+ai-research-analyst/
+├── agents/          # Each agent as a separate module
+├── orchestrator/    # LangGraph state machine
+├── llm/             # Thin wrapper around Groq/Gemini client
+├── tools/           # Web search, scraping, etc.
+├── memory/          # Redis + Chroma Cloud layers
+├── data/            # reserved for future local caches / fixtures
+├── app/             # Streamlit UI
+├── eval/            # RAGAS + custom metrics
+├── tests/           # pytest test suite
+└── .env             # matches the variables below
+```
+
+---
+
+## 🔑 Environment Variables
+
+```dotenv
+# ============================================
+# LLM API KEYS
+# ============================================
+
+# Groq API key (primary LLM provider)
+GROQ_API_KEY=your_groq_api_key_here
+
+# Google Gemini API key (fallback LLM provider)
+GEMINI_API_KEY=your_gemini_api_key_here
+
+
+# ============================================
+# CHROMA VECTOR DATABASE
+# ============================================
+
+CHROMA_HOST=your_chroma_host_here
+CHROMA_API_KEY=your_chroma_api_key_here
+CHROMA_TENANT=your_chroma_tenant_here
+CHROMA_DATABASE=your_chroma_database_here
+
+
+# ============================================
+# REDIS CACHE
+# ============================================
+
+# Full Redis connection URL (recommended)
+# e.g. redis://:password@localhost:6379/0
+REDIS_URL=redis://localhost:6379/0
+
+
+# ============================================
+# MISC
+# ============================================
+
+# Log level: DEBUG | INFO | WARNING | ERROR
+LOG_LEVEL=INFO
+
+# Environment tag: development | staging | production
+ENVIRONMENT=development
+```
+
+Copilot should read config exclusively through a `config.py` (e.g. `pydantic-settings`) that loads these variables — no hardcoded keys/hosts anywhere in agent or tool code.
+
+---
+
+## 🧩 State Shape (for the LangGraph orchestrator)
+
+```python
+from typing import TypedDict, List
+
+class ResearchState(TypedDict):
+    query: str
+    sub_questions: List[str]
+    search_results: List[dict]
+    extracted_facts: List[dict]
+    draft_report: str
+    critique: dict
+    iteration: int
+    final_report: str
+```
+
+---
+
+## ✅ Coding Conventions for Copilot to Follow
+
+- Each agent lives in its own file under `agents/`, exposes a single function `agent_name(state: ResearchState) -> ResearchState`.
+- All LLM calls go through `llm/client.py`, which tries Groq first and falls back to Gemini — never call OpenAI or Anthropic APIs directly.
+- All config/secrets are loaded via `config.py` from the `.env` variables above — no hardcoded keys, hosts, or connection strings.
+- Use Pydantic models for structured LLM outputs (e.g. Planner's sub-question list, Critic's score object).
+- Keep the Streamlit app (`app/main.py`) thin — it should only call the orchestrator and render state/progress, not contain business logic.
+- Log every agent call (name, latency, token usage) to a simple metrics store so it can be surfaced in the RAGAS/eval reports later.
+- Favor small, testable functions in `tools/` over inlining API calls inside agents.
+- Chroma Cloud client should be initialized once (in `memory/vector_store.py`) using `CHROMA_HOST`, `CHROMA_API_KEY`, `CHROMA_TENANT`, `CHROMA_DATABASE`, and reused across agents/tools.
