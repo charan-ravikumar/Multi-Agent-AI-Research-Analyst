@@ -36,7 +36,7 @@ The system is organized around a shared typed state object and a LangGraph workf
 
 - LangGraph-based state machine with parallel fan-out and fan-in.
 - Shared state schema defined in the models package.
-- Best-effort Redis memory layer with graceful degradation if Redis is unavailable.
+- Best-effort Redis memory layer.
 - Structured logging for traceability and debugging.
 - Human-in-the-loop plan approval to allow editing before research begins.
 
@@ -53,7 +53,6 @@ models/             Pydantic and TypedDict models for state and outputs
 orchestrator/       LangGraph graph definitions and state wiring
 tools/              Demo runner, evaluation harness, replay utilities, web search
 tests/              Automated and manual test scripts
-files (4)/          Detailed project documentation and build notes
 ```
 
 ## Setup
