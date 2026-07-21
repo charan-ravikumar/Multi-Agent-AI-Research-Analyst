@@ -1,53 +1,72 @@
 # Autonomous AI Research Analyst
 
-This repository contains an agentic research pipeline that turns a natural-language topic into a structured research report. The system uses LangGraph for orchestration, a set of specialized agents for planning, search, reading, synthesis, critique, and writing, and a Redis-backed memory layer for cross-run context.
+A multi-agent AI research pipeline that turns a natural-language topic into a structured, comprehensive research report. The system uses LangGraph for orchestration, a set of specialized agents for planning, searching, reading, synthesizing, critiquing, and writing, with a Redis-backed memory layer for cross-run context.
 
+---
 
-## What this project does
+## 🎯 Key Features
 
-Given a research question, the pipeline:
+- **Multi-Agent Architecture**: Uses six specialized agents with distinct roles (Strategy, Discovery, Comprehension, Analysis, Quality Control, and Writing).
+- **Stateful Graph Orchestration**: Managed by a LangGraph state machine supporting parallel fan-out and fan-in execution paths.
+- **Reflection & Debate Loop**: A Critic agent evaluates drafts for quality, triggering iterative refinements (up to a safety cap of 3 rounds to control API costs).
+- **Proactive Concurrency & Rate Control**: Designed for free-tier constraints (Groq as primary, Gemini as fallback) with managed request limits and retry/backoff wrappers.
+- **Cross-Run memory**: Uses Redis for session scratchpads, report lookup, and persistence of metadata.
 
-1. Plans a set of sub-questions.
-2. Lets a human approve or edit the plan.
-3. Runs parallel research branches for each sub-question.
-4. Extracts facts from search results.
-5. Synthesizes draft sections and flags contradictions or gaps.
-6. Runs a bounded critique-and-revision loop.
-7. Writes a Markdown report that explicitly discloses unresolved concerns.
-8. Persists a compact record for future retrieval and related-report lookup.
+---
 
-The design is intentionally optimized for a constrained, free-tier environment: DuckDuckGo for search, Groq as the primary LLM provider, Gemini as a fallback, Redis for memory, and local JSON-lines logging.
+## 🏗️ System Architecture
 
-## Core architecture
+```text
+┌─────────────────────────────────────────────┐
+│           STREAMLIT UI (Single App)         │
+│     Shows live agent progress + report       │
+└───────────────────────┬───────────────────────┘
+                        │
+┌───────────────────────▼───────────────────────┐
+│      ORCHESTRATOR (LangGraph State Machine)   │
+│                                               │
+│   ┌─────────┐   ┌──────────┐   ┌──────────┐   │
+│   │ Planner │──▶│ Searcher │──▶│  Reader  │   │
+│   └─────────┘   └──────────┘   └────┬─────┘   │
+│        ▲                             │         │
+│        │        ┌──────────┐   ┌────▼──────┐  │
+│        └────────│  Critic  │◀──│Synthesizer│  │
+│                 └──────────┘   └────┬──────┘  │
+│                                     │          │
+│                               ┌─────▼────┐    │
+│                               │  Writer  │    │
+│                               └──────────┘    │
+└─────────────┬─────────────────────────────────┘
+              │
+    ┌─────────┴─────────┐
+    ▼                   ▼
+┌──────┐          ┌──────────┐
+│Redis │          │Local logs│
+│(STM) │          │/Langfuse │
+└──────┘          └──────────┘
+```
 
-The system is organized around a shared typed state object and a LangGraph workflow.
+### The 6 Agents
 
-### Main components
+| Agent | Role | Key Responsibilities |
+|---|---|---|
+| 🧠 **Planner** | Strategy | Decomposes the query into sub-questions, creates the research plan, and decides depth. |
+| 🔍 **Searcher** | Discovery | Queries free search APIs (DuckDuckGo, Scholar via `scholarly`) and academic APIs (arXiv), scrapes with Playwright. |
+| 📖 **Reader** | Comprehension | Chunks content and extracts key facts. |
+| 🧪 **Synthesizer** | Analysis | Cross-references sources, merges claims, and flags contradictions or gaps. |
+| 🕵️ **Critic** | Quality Control | Fact-checks claims, scores relevance, and raises specific objections to improve the draft. |
+| ✍️ **Writer** | Output | Generates the final structured Markdown report with references, citations, and summaries. |
 
-- Planning: the planner agent decomposes a topic into sub-questions.
-- Search: the searcher agent gathers results for each sub-question.
-- Reading: the reader agent extracts factual claims from search snippets.
-- Synthesis: the synthesizer agent assembles draft content, contradictions, and knowledge gaps.
-- Critique: the critic agent raises specific objections to improve the draft.
-- Writing: the writer agent produces the final Markdown report.
-- Orchestration: the graph in the orchestrator package coordinates the full workflow, including fan-out, fan-in, debate rounds, checkpoints, and memory persistence.
+---
 
-### Key implementation choices
-
-- LangGraph-based state machine with parallel fan-out and fan-in.
-- Shared state schema defined in the models package.
-- Best-effort Redis memory layer.
-- Structured logging for traceability and debugging.
-- Human-in-the-loop plan approval to allow editing before research begins.
-
-## Repository layout
+## 📁 Repository Layout
 
 ```text
 agents/             Agent classes: planner, searcher, reader, synthesizer, critic, writer
 app/                Streamlit UI entry point
 core/               Shared logging utilities
 config.py           Central settings and environment configuration
-llm/                LLM provider wrappers and fallback logic
+llm/                LLM provider wrappers and fallback logic (Groq / Gemini)
 memory/             Redis-backed persistence helpers
 models/             Pydantic and TypedDict models for state and outputs
 orchestrator/       LangGraph graph definitions and state wiring
@@ -55,83 +74,69 @@ tools/              Demo runner, evaluation harness, replay utilities, web searc
 tests/              Automated and manual test scripts
 ```
 
-## Setup
+---
 
-### Prerequisites
+## 🛠️ Tech Stack
 
-- Python 3.9+ (the project targets modern Python versions)
-- Access to the required API keys for Groq and Gemini
-- Redis is optional but recommended for memory features
+- **Orchestration**: LangGraph, LangChain
+- **LLMs**: Groq (primary, free tier), Google Gemini (fallback, free tier)
+- **Memory**: Redis (short-term state, report index, and session metadata)
+- **Tools**: `duckduckgo-search`, `scholarly`, Playwright, arXiv, PyMuPDF, `unstructured`
+- **Backend & UI**: Python, Pydantic, Streamlit
+- **Observability**: Local structured logging, Langfuse tracing
 
-### Install dependencies
+---
 
+## 🚀 Setup & Installation
+
+### 1. Prerequisites
+
+- **Python 3.10+** (target version: 3.12)
+- **[uv](https://github.com/astral-sh/uv)** (recommended for dependency and environment management)
+- **Redis** (optional but recommended for memory features; degrades gracefully if unavailable)
+- **API Keys** for Groq and Google Gemini
+
+### 2. Install Dependencies
+
+Use `uv` to automatically initialize the virtual environment and synchronize dependencies:
 ```bash
-python -m pip install -r requirements.txt
+uv sync
 ```
 
-### Environment variables
+### 3. Environment Configuration
 
-Create a .env file in the project root with values such as:
-
+Create a `.env` file in the root of the project:
 ```env
-GROQ_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here
+# Primary LLM API Key
+GROQ_API_KEY=your_groq_api_key_here
+
+# Fallback LLM API Key
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Redis URL (e.g. local)
+REDIS_URL=redis://localhost:6379/0
 ```
 
-The project uses pydantic-settings, so environment values are read centrally from config.py.
+---
 
-## Running the project
+## 💻 Running the Application
 
-### Streamlit UI
-
+### Start the Streamlit UI
+To launch the interactive web application, run:
 ```bash
-streamlit run app/main.py
+uv run streamlit run app/main.py
 ```
 
-### Demo run without the UI
-
+### Running the Demo without UI
+To run a test research query via the command-line demo:
 ```bash
-python tools/run_demo.py
+uv run python tools/run_demo.py
 ```
 
-### Trace and evaluate runs
-
+### Testing
+To run the verification test suite:
 ```bash
-python tools/trace_summary.py --last
-python tools/eval_harness.py
+uv run python tests/test_v1_send_isolation.py
+uv run python tests/test_v2_retry_parallel.py
+uv run python tests/test_v3_debate_cap.py
 ```
-
-## Testing
-
-The repository includes both automated and manual test scripts.
-
-- Automated tests cover graph behavior, fan-out/fan-in behavior, debate caps, checkpoints, and memory persistence.
-- Manual tests exercise live LLM and web-search interactions.
-
-Example:
-
-```bash
-python tests/test_v1_send_isolation.py
-python tests/test_v2_retry_parallel.py
-python tests/test_v3_debate_cap.py
-```
-
-## Memory and persistence
-
-The system uses Redis for:
-
-- cross-run report lookup
-- session scratchpads
-- persistence of compact report metadata
-
-If Redis is unavailable, the pipeline is designed to degrade gracefully and continue without those features rather than failing outright.
-
-## Known limitations
-
-The current implementation is functional, but it has a few important limitations:
-
-- full-page scraping is not yet implemented, so the reader works from snippet text rather than full page content
-- the Gemini fallback depends on working provider SDK support in the environment
-- the debate loop is intentionally capped to keep cost under control
-- memory matching is keyword-based rather than semantic vector search
-

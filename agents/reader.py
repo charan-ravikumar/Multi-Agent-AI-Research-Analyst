@@ -83,11 +83,14 @@ class ReaderAgent(BaseAgent):
 
     def __init__(self) -> None:
         super().__init__()
-        # Semaphore is instance-level; limits concurrent llm_generate calls
-        # within this agent. When the graph fans out (multiple parallel Reader
-        # branches), each instance gets its own semaphore — combine with a
-        # module-level semaphore if cross-instance limiting is needed.
-        self._sem = asyncio.Semaphore(settings.reader_max_concurrent_llm_calls)
+        self._sems = {}
+
+    @property
+    def sem(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        if loop not in self._sems:
+            self._sems[loop] = asyncio.Semaphore(settings.reader_max_concurrent_llm_calls)
+        return self._sems[loop]
 
     async def run(self, state: ResearchState) -> ResearchState:
         sub_question = state.get("current_sub_question", "").strip()
@@ -190,7 +193,7 @@ class ReaderAgent(BaseAgent):
                     {"role": "user", "content": _RETRY.format(error=last_error)}
                 )
 
-            async with self._sem:  # proactive rate control: max N concurrent LLM calls
+            async with self.sem:  # proactive rate control: max N concurrent LLM calls
                 last_raw, _usage = await self.llm_generate(messages, state=state)
 
             try:

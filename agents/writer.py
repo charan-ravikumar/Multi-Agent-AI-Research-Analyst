@@ -37,7 +37,9 @@ level-2 headers (## Header Name):
 Section requirements:
 - **Executive Summary**: 2-3 sentences capturing the core answer to the research question.
 - **Key Findings**: bullet-point list of the most important facts.
-- **Detailed Analysis**: flowing prose based on the provided draft synthesis.
+- **Detailed Analysis**: a comprehensive, multi-paragraph, flowing analysis based on the
+  provided draft synthesis. You must expand on each point, detail the mechanisms or nuances,
+  provide contextual details, and aim to write an exhaustive, elaborate breakdown of the findings.
 - **Contradictions and Conflicting Evidence**: list every contradiction provided
   explicitly. If none were identified, write exactly: "No contradictions were
   identified across sources."

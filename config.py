@@ -70,8 +70,8 @@ class Settings(BaseSettings):
     # With N branches × 10 search results × 3 concurrent LLM calls per Reader,
     # each branch uses ~600-800 tokens/min. 3 branches = ~1800-2400 TPM, comfortably
     # within the 6,000 TPM limit. Raise to 5-10 when on a paid tier.
-    planner_min_sub_questions: int = 3
-    planner_max_sub_questions: int = 3
+    planner_min_sub_questions: int = 4
+    planner_max_sub_questions: int = 5
 
     # ── Academic sources ──────────────────────────────────────────────────────
     academic_max_results: int = 5

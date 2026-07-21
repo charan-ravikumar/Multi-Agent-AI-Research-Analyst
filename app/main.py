@@ -27,9 +27,14 @@ State machine (st.session_state.phase)
 
 # ── env vars MUST be set before any project imports ───────────────────────────
 import os
+import sys
+from pathlib import Path
 
-os.environ.setdefault("SEARCH_MAX_RESULTS", "3")
-os.environ.setdefault("READER_MAX_CONCURRENT_LLM_CALLS", "1")
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+
+os.environ.setdefault("SEARCH_MAX_RESULTS", "5")
+os.environ.setdefault("READER_MAX_CONCURRENT_LLM_CALLS", "2")
 
 # ── stdlib ─────────────────────────────────────────────────────────────────────
 import asyncio
@@ -37,13 +42,11 @@ import json
 import threading
 import time
 import uuid
-from pathlib import Path
 
 # ── third-party ────────────────────────────────────────────────────────────────
 import streamlit as st
 
 # ── constants ──────────────────────────────────────────────────────────────────
-ROOT = Path(__file__).parent.parent
 LOG_FILE = ROOT / "logs" / "agent_traces.jsonl"
 POLL_INTERVAL = 3   # seconds between progress refreshes during research phase
 TRACE_TAIL = 10     # number of recent trace events to show
