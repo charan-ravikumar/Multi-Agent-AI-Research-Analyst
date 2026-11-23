@@ -14,7 +14,7 @@ Node ↔ field ownership map (read → write):
   Critic       draft, contradictions, unresolved_gaps → critic_objections
   Debate loop  (orchestrates Critic + Synthesizer rounds) → critic_objections,
                debate_round, debate_resolved, debate_forced, revised_draft
-  Writer       revised_draft | draft, critique  → final_report
+  Writer       revised_draft | draft            → final_report
 
 The Annotated[List[...], operator.add] reducer lets parallel Searcher branches
 merge their results automatically without extra orchestrator logic.
@@ -27,7 +27,6 @@ from typing import Annotated, List, Optional
 from typing_extensions import NotRequired, TypedDict
 
 from models.citation import Citation
-from models.critique import Critique
 from models.fact import Fact
 from models.research_plan import ResearchPlan
 from models.search_result import SearchResult
@@ -70,9 +69,6 @@ class ResearchState(TypedDict):
     # failed_sub_questions promoted here so Critic/Writer see them explicitly.
     unresolved_gaps: Annotated[List[str], operator.add]
 
-    # ── critic output ─────────────────────────────────────────────────────────
-    critique: Optional[Critique]
-
     # ── debate loop control ───────────────────────────────────────────────────
     # Specific, addressable objections produced by CriticAgent each round.
     # Plain list (no operator.add): debate loop is sequential, not parallel.
@@ -90,17 +86,36 @@ class ResearchState(TypedDict):
     # unresolved issues to the reader.
     debate_forced: NotRequired[bool]
 
+    # True when the Critic's output could not be parsed, so the draft was NOT
+    # actually reviewed (never report this as "accepted").
+    debate_review_skipped: NotRequired[bool]
+
+    # Per-run review-loop rounds (0 = off).  Overrides settings.debate_max_rounds when present.
+    review_rounds: NotRequired[int]
+
+    # Medium/low reviewer points left unaddressed when the loop accepted the draft.
+    review_notes: NotRequired[List[str]]
+    previous_objections: NotRequired[List[str]]
+    critic_blocking: NotRequired[int]
+    critic_minor: NotRequired[List[str]]
+
     # Debate-revised draft produced by the Synthesizer revision pass.
     # Writer reads this preferentially over state["draft"] (which uses
     # operator.add and cannot be safely overwritten post-fan-in).
     revised_draft: NotRequired[List[str]]
 
+    # ── writer output: verified references + grounding stats ─────────────────
+    references: NotRequired[List[dict]]        # [{n, url, title}] actually cited
+    citation_stats: NotRequired[dict]          # cited_ratio, weakly_supported, ...
+    usage_summary: NotRequired[dict]           # tokens/calls by agent+model, optional cost, budget
+    debate_budget_exhausted: NotRequired[bool] # review stopped early: token budget spent
+
     # ── writer output ─────────────────────────────────────────────────────────
     final_report: str
 
     # ── orchestrator control ──────────────────────────────────────────────────
-    iteration: int      # reflection-loop counter; orchestrator checks vs
-                        # settings.max_reflection_iterations before re-routing
+    # Unused by the current topology (no re-research loop); kept at 0 for log fields.
+    iteration: int
 
     # When True the _plan_approval_node skips interrupt() and auto-approves the
     # Planner's sub_questions without human review.  Set this in automated tests

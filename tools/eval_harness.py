@@ -64,7 +64,6 @@ from typing import Any
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-import time
 
 import llm
 from llm import ModelTier
@@ -345,11 +344,10 @@ def run_evaluation(state: dict, quick: bool = False) -> dict:
     citations: list[dict] = state.get("citations", [])
     draft: list[str] = state.get("draft", [])
     revised_draft: list[str] = state.get("revised_draft") or []
-    final_report: str = state.get("final_report", "")
     debate_fired: bool = bool(revised_draft) and revised_draft != draft
 
     print(f"\n{'='*70}")
-    print(f"  EVALUATION HARNESS")
+    print("  EVALUATION HARNESS")
     print(f"  session_id : {session_id}")
     print(f"  sub_questions : {len(sub_questions)}")
     print(f"  extracted_facts : {len(extracted_facts)}")
@@ -643,11 +641,11 @@ def _print_summary(s: dict, debate_fired: bool, pre_faith: dict, post_faith: dic
             print(f"  ✘  Hallucination INCREASED ({pre_h:.1%} → {post_h:.1%}).")
             print("  The revision added fabricated content beyond the original draft.")
 
-        if d_delta is not None and post_d > pre_d + 0.05:
+        if d_delta is not None and post_d is not None and pre_d is not None and post_d > pre_d + 0.05:
             print(f"  ✔  Disclosure INCREASED ({pre_d:.1%} → {post_d:.1%}): the revised")
             print("  draft added honest epistemic hedges where facts were missing —")
             print("  the intended behavior of the fixed revision prompt.")
-        elif d_delta is not None and post_d < 0.05:
+        elif d_delta is not None and post_d is not None and post_d < 0.05:
             print(f"  ○  Disclosure LOW ({post_d:.1%}): few hedges added.")
 
     pre_rel = s["relevance_pre"]

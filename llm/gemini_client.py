@@ -28,7 +28,6 @@ from typing import List
 # ─────────────────────────────────────────────────────────────────────────────
 from google import genai
 from google.genai import types
-from google.genai.errors import APIError
 
 # ── INTERNAL MODULE — do not import from agents or tools ────────────────
 # Use `import llm; llm.generate(...)` instead.
@@ -46,7 +45,12 @@ _client: genai.Client | None = None
 def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        if not settings.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        _client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options=types.HttpOptions(timeout=int(settings.llm_timeout_seconds * 1000)),  # ms
+        )
     return _client
 
 
@@ -56,6 +60,7 @@ def generate(
     model: str = GEMINI_MODEL,
     temperature: float = 0.2,
     max_tokens: int = 2048,
+    json_mode: bool = False,
 ) -> tuple[str, dict]:
     """
     Call Gemini via the new google-genai SDK and return (response_text, usage_dict).
@@ -82,13 +87,25 @@ def generate(
         system_instruction="\n\n".join(system_parts) if system_parts else None,
         temperature=temperature,
         max_output_tokens=max_tokens,
+        response_mime_type="application/json" if json_mode else None,
+        thinking_config=(types.ThinkingConfig(thinking_budget=settings.gemini_thinking_budget)
+                         if settings.gemini_thinking_budget >= 0 else None),
     )
 
     t0 = time.perf_counter()
-    response = client.models.generate_content(model=model, contents=contents, config=cfg)
+    response = client.models.generate_content(model=model, contents=contents, config=cfg)  # type: ignore[arg-type]
     latency = time.perf_counter() - t0
 
-    text = response.text
+    # response.text is None when the response is blocked or empty.
+    text = response.text or ""
+    finish = None
+    try:
+        fr = (response.candidates or [])[0].finish_reason
+        finish = getattr(fr, "name", str(fr)) if fr is not None else None
+    except (AttributeError, IndexError, TypeError):
+        pass
+    if finish == "MAX_TOKENS":
+        finish = "length"          # normalise to the Groq/OpenAI spelling
     um = response.usage_metadata
     usage = {
         "provider": "gemini",
@@ -97,7 +114,7 @@ def generate(
         "completion_tokens": um.candidates_token_count if um else None,
         "total_tokens": um.total_token_count if um else None,
         "latency_s": round(latency, 3),
+        "finish_reason": finish,
     }
     logger.debug("Gemini response | %s", usage)
-    return text, usage
     return text, usage

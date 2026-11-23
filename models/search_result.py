@@ -16,6 +16,7 @@ class SearchResult(BaseModel):
     snippet: str                # search-engine summary blurb
     full_text: str = ""         # scraped body text
     source_type: str = "web"    # "web" | "arxiv" | "semantic_scholar"
+    quality: float = 0.0        # heuristic source quality 0..1 (tools/sources.py); 0 = not scored
 
     @field_validator("source_type")
     @classmethod

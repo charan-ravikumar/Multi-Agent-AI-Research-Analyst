@@ -2,17 +2,18 @@
 memory/redis_store.py — Redis-only memory layer
 
 Provides helpers for:
-  - session state  (agent scratchpads, short-term working memory)
-  - extracted facts (structured records persisted per research session)
+  - cross-run report memory (completed report summaries, keyword lookup)
 
-Keys follow the pattern:  <prefix>:<session_id>:<field>
-All values are JSON-serialised so callers work with plain Python dicts/lists.
+Used only by the plan-approval lookup and the final memory node (best-effort; both run in
+worker threads, never on the event loop).
 """
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+import re
+import time
+import uuid
 
 import redis
 
@@ -45,66 +46,6 @@ def _key(*parts: str) -> str:
     return ":".join(parts)
 
 
-def set_value(session_id: str, field: str, value: Any, ttl: int | None = None) -> None:
-    """Store a JSON-serialisable value under session_id:field."""
-    r = get_client()
-    k = _key(session_id, field)
-    r.set(k, json.dumps(value), ex=ttl or settings.cache_ttl_seconds)
-
-
-def get_value(session_id: str, field: str) -> Any | None:
-    """Retrieve and deserialise a value, or None if missing/expired."""
-    r = get_client()
-    raw = r.get(_key(session_id, field))
-    if raw is None:
-        return None
-    return json.loads(raw)
-
-
-def delete_session(session_id: str) -> None:
-    """Remove all keys belonging to a session."""
-    r = get_client()
-    pattern = _key(session_id, "*")
-    keys = r.keys(pattern)
-    if keys:
-        r.delete(*keys)
-    logger.debug("Deleted %d keys for session %s", len(keys), session_id)
-
-
-# ── agent scratchpad ──────────────────────────────────────────────────────────
-
-def save_scratchpad(session_id: str, agent_name: str, data: dict) -> None:
-    """Persist an agent's working notes for the current session."""
-    set_value(session_id, f"scratchpad:{agent_name}", data)
-
-
-def load_scratchpad(session_id: str, agent_name: str) -> dict:
-    """Load an agent's scratchpad, returning an empty dict if absent."""
-    return get_value(session_id, f"scratchpad:{agent_name}") or {}
-
-
-# ── extracted facts ───────────────────────────────────────────────────────────
-
-def append_facts(session_id: str, facts: list[dict]) -> None:
-    """
-    Append structured fact records to this session's fact list.
-    Each fact dict should include at minimum: source, content, sub_question.
-    """
-    existing: list[dict] = get_value(session_id, "extracted_facts") or []
-    existing.extend(facts)
-    set_value(session_id, "extracted_facts", existing)
-
-
-def get_facts(session_id: str) -> list[dict]:
-    """Return all extracted facts accumulated so far for this session."""
-    return get_value(session_id, "extracted_facts") or []
-
-
-def clear_facts(session_id: str) -> None:
-    """Reset the fact list (e.g. when starting a fresh research pass)."""
-    set_value(session_id, "extracted_facts", [])
-
-
 # ── cross-run report memory ───────────────────────────────────────────────────
 #
 # Stores a compact record for every completed report so that later runs can
@@ -121,9 +62,6 @@ def clear_facts(session_id: str) -> None:
 # The index is capped at _REPORTS_MAX_SIZE entries (oldest pruned on write).
 # ─────────────────────────────────────────────────────────────────────────────
 
-import re
-import time
-import uuid
 
 _REPORTS_INDEX_KEY = "reports:index"
 _REPORTS_RECORD_PREFIX = "reports:record:"
@@ -222,7 +160,8 @@ def get_recent_reports(n: int = 20) -> list[dict]:
 
     records: list[dict] = []
     for rid in report_ids:
-        raw = r.get(f"{_REPORTS_RECORD_PREFIX}{rid}")
+        rid_s = rid.decode() if isinstance(rid, bytes) else str(rid)
+        raw = r.get(f"{_REPORTS_RECORD_PREFIX}{rid_s}")
         if raw is None:
             continue  # record expired; index will be pruned on next write
         try:

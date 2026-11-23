@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Any, List
 
-from agents.base import BaseAgent
+from agents.base import BaseAgent, StateLike
 from llm import ModelTier
-from models import ResearchState
+from core.sanitize import sanitize_report_markdown
+from core.usage import tracker
+from core.citations import (
+    analyze, cited_numbers, number_citations, render_references, verify_numbered,
+)
 from models.citation import Citation
-from models.critique import Critique
 
 # ── section headers the report MUST contain (case-insensitive match) ──────────
 _REQUIRED_HEADERS = [
@@ -16,15 +19,14 @@ _REQUIRED_HEADERS = [
     "detailed analysis",
     "contradictions",
     "knowledge gaps",
-    "references",
-]
+]   # "## References" is appended by code from the verified citation list
 
 # ── prompts ───────────────────────────────────────────────────────────────────
 
 _SYSTEM = """\
 You are a research writer producing a structured analytical report in Markdown.
 
-The report MUST contain exactly these six sections in order, with these exact
+The report MUST contain exactly these five sections in order, with these exact
 level-2 headers (## Header Name):
 
 1. ## Executive Summary
@@ -32,7 +34,6 @@ level-2 headers (## Header Name):
 3. ## Detailed Analysis
 4. ## Contradictions and Conflicting Evidence
 5. ## Knowledge Gaps and Limitations
-6. ## References
 
 Section requirements:
 - **Executive Summary**: 2-3 sentences capturing the core answer to the research question.
@@ -45,11 +46,16 @@ Section requirements:
   identified across sources."
 - **Knowledge Gaps and Limitations**: list every gap provided explicitly. If none,
   write: "No significant gaps were identified."
-- **References**: numbered list [1], [2], ... — each entry: title and URL.
 
 CRITICAL (Section 5.9 compliance): every item supplied in the contradictions and
 gaps lists must appear in the corresponding sections. Omitting or paraphrasing
 them into invisibility is not acceptable.
+
+CITATIONS: the draft synthesis marks claims with numeric citation markers like [1] or
+[2][4].  Keep these markers attached to the claims they support (in Key Findings and
+Detailed Analysis).  NEVER invent a marker number, never cite a source that is not in
+the numbered source list, and do NOT write a References section — it is appended
+automatically from the sources you actually cited.
 
 Write in clear, professional prose. Do not wrap the output in code fences.\
 """
@@ -68,10 +74,7 @@ Contradictions between sources ({n_contra}):
 Knowledge gaps ({n_gaps}):
 {gaps_block}
 
-Critique / improvement notes (apply if present):
-{critique_block}
-
-Citations to use in References:
+Numbered sources (for context only — do not reproduce them):
 {citations_block}
 
 Write the full research report now.\
@@ -95,7 +98,7 @@ class WriterAgent(BaseAgent):
 
 Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
                  state["citations"], state["contradictions"],
-             state["unresolved_gaps"], state["critique"] (optional)
+             state["unresolved_gaps"]
     Writes : state["final_report"]
 
     Design note: the Writer generates plain Markdown prose rather than JSON.
@@ -107,8 +110,12 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
 
     name = "writer"
     tier = ModelTier.STRONG
+    budget_exempt = True    # a report must still be produced when the budget is spent
+    # The report asks for six sections incl. a long analysis; 2048 tokens was ~93% used
+    # for a 5-sub-question run in the logs, so truncation is a real risk.
+    max_tokens = 4096
 
-    async def run(self, state: ResearchState) -> ResearchState:
+    async def run(self, state: StateLike) -> dict[str, Any]:
         session_id = state["session_id"]
         iteration = state.get("iteration", 0)
         sub_question = state.get("current_sub_question", state.get("query", ""))
@@ -116,11 +123,13 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         contradictions: List[str] = state.get("contradictions", [])
         gaps: List[str] = state.get("unresolved_gaps", [])
         citations: List[Citation] = state.get("citations", [])
-        critique: Optional[Critique] = state.get("critique")
 
         # Prefer debate-revised draft if it exists; fall back to raw fan-in draft.
         sections = state.get("revised_draft") or state.get("draft", [])
-        draft_text = "\n\n".join(sections)
+        facts = state.get("extracted_facts", [])
+        grounding = analyze(sections, facts)            # computed on [S:key]-marked text
+        numbered, refs, unknown_markers = number_citations(sections, citations)
+        draft_text = "\n\n".join(numbered)
 
         # Append forced-resolution disclosure to gaps so the report discloses it.
         debate_forced: bool = state.get("debate_forced", False)
@@ -131,9 +140,19 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
                 f" round cap with {len(forced_objections)} unresolved issue(s):"
             ] + [f"  - {obj}" for obj in forced_objections]
 
+        review_notes: List[str] = state.get("review_notes", [])
+        if review_notes:
+            gaps = list(gaps) + ["REVIEWER NOTES (minor, not blocking):"] + [f"  - {n}" for n in review_notes[:6]]
+
+        if state.get("debate_budget_exhausted"):
+            gaps = list(gaps) + [
+                "REVIEW NOTE: the critic/reviser loop stopped early because the run's token budget was exhausted;"
+                " the draft may not have been fully reviewed."
+            ]
+
         self.log.info(
             f"writing final report: {len(contradictions)} contradiction(s), "
-            f"{len(gaps)} gap(s), {len(citations)} citation(s)",
+            f"{len(gaps)} gap(s), {len(refs)} cited source(s)",
             step="writer_start",
             session_id=session_id,
             iteration=iteration,
@@ -145,8 +164,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             draft=draft_text,
             contradictions=contradictions,
             gaps=gaps,
-            citations=citations,
-            critique=critique,
+            refs=refs,
         )
 
         messages: list[dict] = [
@@ -193,7 +211,33 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             iteration=iteration,
         )
 
-        return {"final_report": last_report.strip()}
+        # ── deterministic citation verification + references (code, not LLM) ──────
+        body, removed = verify_numbered(_strip_llm_references(last_report.strip()), {r["n"] for r in refs})
+        cited = cited_numbers(body)
+        report = sanitize_report_markdown(f"{body}\n\n{render_references(refs, cited)}")
+        stats = {
+            **{k: v for k, v in grounding.items() if k != "problems"},
+            "unknown_markers": grounding["unknown_markers"] + unknown_markers,
+            "invalid_markers_removed": removed,
+            "sources_cited": len(cited),
+            "sources_consulted": len({c.url for c in citations}),
+        }
+        self.log.info(
+            f"citation check: {stats}",
+            step="citation_check",
+            session_id=session_id,
+            iteration=iteration,
+        )
+        usage_summary = tracker.summary(session_id)
+        self.log.info(
+            f"run usage: {usage_summary['total_tokens']} tokens in {usage_summary['calls']} calls",
+            step="run_usage",
+            session_id=session_id,
+            iteration=iteration,
+            usage=usage_summary,
+        )
+        return {"final_report": report, "references": [r for r in refs if r["n"] in cited],
+                "citation_stats": stats, "usage_summary": usage_summary}
 
 
 # ── module-level helpers ──────────────────────────────────────────────────────
@@ -205,8 +249,7 @@ def _build_user_message(
     draft: str,
     contradictions: List[str],
     gaps: List[str],
-    citations: List[Citation],
-    critique: Optional[Critique],
+    refs: List[dict],
 ) -> str:
     contra_block = (
         "\n".join(f"- {c}" for c in contradictions)
@@ -216,21 +259,9 @@ def _build_user_message(
         "\n".join(f"- {g}" for g in gaps)
         if gaps else "(none)"
     )
-    citations_block = "\n".join(
-        f"[{i}] {c.title} — {c.url}"
-        for i, c in enumerate(citations, 1)
-    ) if citations else "(none)"
-
-    critique_block = "(no critique — write from draft directly)"
-    if critique is not None:
-        parts = []
-        if critique.feedback:
-            parts.append(f"Feedback: {critique.feedback}")
-        if critique.gaps:
-            parts.append("Topics to address:")
-            parts.extend(f"  - {g}" for g in critique.gaps)
-        if parts:
-            critique_block = "\n".join(parts)
+    citations_block = (
+        "\n".join(f"[{r['n']}] {r['title']}" for r in refs) if refs else "(none)"
+    )
 
     return _USER.format(
         query=query,
@@ -240,7 +271,6 @@ def _build_user_message(
         contra_block=contra_block,
         n_gaps=len(gaps),
         gaps_block=gaps_block,
-        critique_block=critique_block,
         citations_block=citations_block,
     )
 
@@ -282,6 +312,11 @@ def _validate_report(
             )
 
     return issues
+
+
+def _strip_llm_references(report: str) -> str:
+    """Drop any References section the LLM wrote anyway; ours is built from verified sources."""
+    return re.sub(r"(?ims)^#{1,3}\s*references\b[^\n]*\n.*?(?=^#{1,3}\s|\Z)", "", report).strip()
 
 
 def _extract_section(report: str, header_keyword: str) -> str:

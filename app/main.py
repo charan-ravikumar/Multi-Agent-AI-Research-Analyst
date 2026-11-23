@@ -39,6 +39,7 @@ os.environ.setdefault("READER_MAX_CONCURRENT_LLM_CALLS", "2")
 # ── stdlib ─────────────────────────────────────────────────────────────────────
 import asyncio
 import json
+import re
 import threading
 import time
 import uuid
@@ -87,20 +88,30 @@ def _str_list(val) -> list[str]:
 
 # ── trace-log helpers ──────────────────────────────────────────────────────────
 
-def _read_trace_tail(session_id: str, n: int = TRACE_TAIL) -> list[dict]:
-    """Return the last *n* log entries for *session_id* from agent_traces.jsonl."""
+def _read_trace_tail(session_id: str, n: int = TRACE_TAIL, max_bytes: int = 256_000) -> list[dict]:
+    """Return the last *n* log entries for *session_id*.
+
+    Reads only the final ``max_bytes`` of the shared trace file (not the whole file) so the
+    cost of a poll does not grow with the log; a partial first line is discarded."""
     if not LOG_FILE.exists():
         return []
     entries: list[dict] = []
     try:
-        with open(LOG_FILE, encoding="utf-8") as fh:
-            for raw in fh:
-                try:
-                    rec = json.loads(raw)
-                    if rec.get("session_id") == session_id:
-                        entries.append(rec)
-                except Exception:
-                    pass
+        with open(LOG_FILE, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            chunk = fh.read().decode("utf-8", errors="replace")
+        lines = chunk.splitlines()
+        if size > max_bytes:
+            lines = lines[1:]                      # first line is probably cut in half
+        for raw in lines:
+            try:
+                rec = json.loads(raw)
+            except ValueError:
+                continue
+            if rec.get("session_id") == session_id:
+                entries.append(rec)
     except OSError:
         pass
     return entries[-n:]
@@ -139,10 +150,21 @@ def _research_thread(
     asyncio.set_event_loop(loop)
     try:
         from langgraph.types import Command  # noqa: PLC0415
-        result = loop.run_until_complete(
-            app_ref.ainvoke(Command(resume=resume_value), config=cfg)
-        )
+        from config import settings  # noqa: PLC0415
+        from core import tracing  # noqa: PLC0415
+
+        async def _run():
+            sid = cfg.get("configurable", {}).get("session_id", "")
+            with tracing.run_span("research", sid):
+                return await asyncio.wait_for(
+                    app_ref.ainvoke(Command(resume=resume_value), config=cfg),
+                    timeout=settings.run_timeout_seconds,
+                )
+
+        result = loop.run_until_complete(_run())
         result_holder["result"] = result
+    except asyncio.TimeoutError:
+        result_holder["error"] = "Run exceeded the time limit and was cancelled."
     except Exception as exc:
         result_holder["error"] = str(exc)
     finally:
@@ -155,18 +177,64 @@ def _research_thread(
 def _render_debate_banner(state: dict) -> None:
     forced  = state.get("debate_forced", False)
     rounds  = state.get("debate_round", 0)
-    if forced:
+    if state.get("debate_review_skipped"):
+        st.warning(
+            "**The Critic review was skipped** (its output could not be parsed), so this "
+            "draft was NOT independently reviewed.",
+            icon="⚠",
+        )
+    elif forced:
         st.warning(
             f"**Debate loop hit the round cap** ({rounds} round(s) completed).  "
             "The Critic still had unresolved objections when the limit was reached.  "
             "Unresolved gaps and contradictions are disclosed in the sections below.",
             icon="🔁",
         )
+    elif not rounds and not state.get("review_rounds"):
+        st.caption("Review loop was off for this run (enable it on the start page).")
     elif rounds:
         st.success(
             f"Critic accepted the revised draft after {rounds} debate round(s).",
             icon="✅",
         )
+
+
+def _render_degraded_banner(state: dict) -> None:
+    failed = [e for e in _str_list(state.get("routing_history")) if e.startswith("branch_failed")]
+    if failed:
+        st.warning(
+            f"**Partial report:** {len(failed)} research branch(es) failed and were skipped. "
+            "The affected sub-questions are listed under Unresolved gaps.",
+            icon="⚠",
+        )
+
+
+def _render_citation_stats(state: dict) -> None:
+    s = state.get("citation_stats") or {}
+    if not s or not s.get("claim_sentences"):
+        return
+    st.caption(
+        f"Grounding check (automated, lexical — not a proof of correctness): "
+        f"{s.get('cited', 0)}/{s['claim_sentences']} claim sentences cite a source; "
+        f"{s.get('uncited', 0)} uncited, {s.get('weakly_supported', 0)} weakly supported "
+        f"(share <2 key terms with the cited facts); "
+        f"{s.get('invalid_markers_removed', 0)} invalid citation marker(s) removed; "
+        f"{s.get('sources_cited', 0)} of {s.get('sources_consulted', 0)} consulted sources cited."
+    )
+
+
+def _render_usage(state: dict) -> None:
+    u = state.get("usage_summary") or {}
+    if not u.get("calls"):
+        return
+    cost = u.get("estimated_cost_usd")
+    with st.expander(
+        f"Run usage: {u['total_tokens']:,} tokens in {u['calls']} LLM calls"
+        + (f" (≈ ${cost:.4f})" if cost is not None else ""),
+        expanded=False,
+    ):
+        st.json({"by_agent": u.get("by_agent"), "by_model": u.get("by_model"),
+                 "truncated_calls": u.get("truncated_calls"), "budget": u.get("budget") or "off"})
 
 
 def _render_gaps_and_contradictions(state: dict) -> None:
@@ -191,7 +259,7 @@ def _render_gaps_and_contradictions(state: dict) -> None:
 def _render_citations(citations: list) -> None:
     if not citations:
         return
-    st.subheader(f"Citations ({len(citations)})")
+    st.subheader(f"Sources consulted ({len(citations)})")
     seen: set[str] = set()
     for i, cit in enumerate(citations, 1):
         url     = _attr(cit, "url",         "#") or "#"
@@ -239,14 +307,28 @@ def _phase_idle() -> None:
         placeholder="e.g. Applications of large language models in healthcare",
         key="query_input",
     )
+    st.checkbox(
+        "Run the critic/reviser review loop (opt-in)",
+        key="review_loop",
+        help="Measured on 3 test queries: more citation markers, no faithfulness gain, slightly lower "
+             "completeness, ~75% more tokens. Off by default.",
+    )
     submitted = st.button(
         "Start research →",
         type="primary",
         disabled=not (query or "").strip(),
     )
-    if submitted and query.strip():
+    clean_query = None
+    if submitted:
+        try:
+            from core.sanitize import validate_query  # noqa: PLC0415
+            clean_query = validate_query(query)
+        except ValueError as exc:
+            st.error(str(exc))
+    if clean_query:
         st.session_state.phase      = "planning"
-        st.session_state.query      = query.strip()
+        st.session_state.review_rounds = 2 if st.session_state.get("review_loop") else 0
+        st.session_state.query      = clean_query
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.thread_id  = str(uuid.uuid4())
         st.rerun()
@@ -277,15 +359,21 @@ def _phase_planning() -> None:
             contradictions=[],
             unresolved_gaps=[],
             draft=[],
-            critique=None,
             final_report="",
             iteration=0,
             routing_history=[],
             auto_approve_plan=False,   # human checkpoint must fire
+            review_rounds=st.session_state.get("review_rounds", 0),
         )
         cfg = {"configurable": {"thread_id": st.session_state.thread_id}}
         try:
-            result = asyncio.run(_get_graph().ainvoke(initial, config=cfg))
+            from core import tracing  # noqa: PLC0415
+
+            async def _plan():
+                with tracing.run_span("planning", st.session_state.session_id, st.session_state.query):
+                    return await _get_graph().ainvoke(initial, config=cfg)
+
+            result = asyncio.run(_plan())
         except Exception as exc:
             st.session_state.phase = "error"
             st.session_state.error = str(exc)
@@ -368,7 +456,8 @@ def _phase_awaiting_approval() -> None:
 
 def _start_research(approved_sqs: list[str]) -> None:
     """Kick off the research background thread and transition to 'researching'."""
-    cfg           = {"configurable": {"thread_id": st.session_state.thread_id}}
+    cfg           = {"configurable": {"thread_id": st.session_state.thread_id,
+                                      "session_id": st.session_state.session_id}}
     result_holder = {"done": False}
     t = threading.Thread(
         target=_research_thread,
@@ -437,17 +526,22 @@ def _phase_done() -> None:
     # Debate-loop outcome banner (must appear before the report so the reader
     # sees the disclosure context before reading the content)
     _render_debate_banner(state)
+    _render_degraded_banner(state)
 
     # Final report
     final_report = state.get("final_report", "")
     if final_report:
-        st.markdown(final_report, unsafe_allow_html=False)
+        from core.sanitize import sanitize_report_markdown  # noqa: PLC0415
+        st.markdown(sanitize_report_markdown(final_report), unsafe_allow_html=False)
+        _render_citation_stats(state)
     else:
         st.warning(
             "No final report was produced.  "
             "Check the agent logs under logs/agent_traces.jsonl.",
             icon="⚠",
         )
+
+    _render_usage(state)
 
     # Gaps and contradictions — the backend explicitly surfaces these;
     # the UI must not hide them.
@@ -471,7 +565,7 @@ def _phase_error() -> None:
     err = st.session_state.get("error", "Unknown error")
     err_lower = err.lower()
 
-    if any(kw in err_lower for kw in ("rate", "tpm", "tpd", "exhausted", "quota")):
+    if re.search(r"\b(rate[- ]?limit\w*|429|tpm|tpd|exhausted|quota)\b", err_lower):
         st.error(
             "**Groq rate limit reached.**\n\n"
             "The free tier enforces a tokens-per-minute (TPM) and a daily "
@@ -505,7 +599,7 @@ _SESSION_KEYS = (
     "bg_thread", "bg_result",
     "error",
     "sq_textarea", "_sq_default",
-    "query_input",
+    "query_input", "review_loop", "review_rounds",
 )
 
 

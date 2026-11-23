@@ -1,14 +1,14 @@
-﻿"""
-orchestrator/graph.py â€” LangGraph StateGraph for the research pipeline
+"""
+orchestrator/graph.py — LangGraph StateGraph for the research pipeline
 
-Topology (Stage 2 â€” parallel fan-out per sub-question):
+Topology (Stage 2 — parallel fan-out per sub-question):
 
     START
       -> planner            PlannerAgent         query -> sub_questions
       -> [conditional]      _fan_out             returns [Send("process_sub_question", ...)]
                                                  one Send per sub-question (parallel)
       -> process_sub_question  _process_sub_question  composite node:
-                                 Searcher -> [optional retry] -> Reader -> Synthesizer
+                                 Searcher(+page fetch) -> [optional retry] -> Reader -> Synthesizer
                                  accumulates to: search_results, extracted_facts,
                                                  draft, citations, contradictions,
                                                  unresolved_gaps, routing_history
@@ -30,7 +30,7 @@ Zero-results retry:
     always sees current_sub_question="" and any go_searcher condition is permanently
     False.  Verified in tests/test_v2_retry_parallel.py.
 
-LangGraph version: 1.2.7
+LangGraph version: see uv.lock
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ import time
 from datetime import datetime
 
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Send, interrupt, Command
+from langgraph.types import Send, interrupt
 from langgraph.checkpoint.memory import MemorySaver
 
 from agents.planner import PlannerAgent
@@ -50,9 +50,10 @@ from agents.synthesizer import SynthesizerAgent
 from agents.writer import WriterAgent
 from config import settings
 from core.logger import get_logger
+from core.usage import BudgetExceeded, tracker
 from models import ResearchState
 
-# â”€â”€ agent singletons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── agent singletons ──────────────────────────────────────────────────────────
 _planner = PlannerAgent()
 _searcher = SearcherAgent()
 _reader = ReaderAgent()
@@ -66,7 +67,7 @@ _plan_log    = get_logger("plan")
 _memory_log  = get_logger("memory")
 
 
-# â”€â”€ fan-out function (used as conditional edge path after planner) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── fan-out function (used as conditional edge path after planner) ────────────
 
 def _fan_out(state: ResearchState) -> list:
     """
@@ -77,7 +78,7 @@ def _fan_out(state: ResearchState) -> list:
     """
     sub_questions = state.get("sub_questions", [])
     if not sub_questions:
-        raise ValueError("Planner produced no sub_questions â€” cannot fan out.")
+        raise ValueError("Planner produced no sub_questions — cannot fan out.")
     return [
         Send("process_sub_question", {**state, "current_sub_question": sq})
         for sq in sub_questions
@@ -187,9 +188,41 @@ async def _plan_approval_node(state: ResearchState) -> dict:
         ],
     }
 
-# â”€â”€ composite branch node â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── composite branch node ─────────────────────────────────────────────────────
 
 async def _process_sub_question(state: dict) -> dict:
+    """
+    Failure-isolating wrapper around the branch pipeline.
+
+    One sub-question failing (provider outage, unexpected exception) must not
+    discard the other branches' completed work.  On any Exception the branch
+    returns a recorded gap + routing entry instead of raising; the run only
+    aborts if EVERY branch failed (see _supervisor_node).
+
+    The sub-question is stripped here once so every downstream equality check
+    (search results, facts, failed list) compares identical strings.
+    """
+    sq = state.get("current_sub_question", "").strip()
+    state = {**state, "current_sub_question": sq}
+    try:
+        return await _process_sub_question_inner(state)
+    except Exception as exc:  # noqa: BLE001 — isolate the branch; CancelledError is BaseException
+        _branch_log.error(
+            f"BRANCH_FAILED [{sq}]: {type(exc).__name__}: {exc}",
+            step="branch_failed",
+            session_id=state.get("session_id", ""),
+        )
+        return {
+            "failed_sub_questions": [sq],
+            "unresolved_gaps": [
+                f'Research for sub-question "{sq}" failed and was skipped '
+                f"({type(exc).__name__}: {str(exc)[:160]})"
+            ],
+            "routing_history": [f"branch_failed | [{sq}] {type(exc).__name__}: {str(exc)[:160]}"],
+        }
+
+
+async def _process_sub_question_inner(state: dict) -> dict:
     """
     Composite branch node: runs the full Searcher -> Reader -> Synthesizer
     pipeline for ONE sub-question in a single Python function.
@@ -201,7 +234,7 @@ async def _process_sub_question(state: dict) -> dict:
     proof.
 
     Handles zero-results retry internally (capped at 1 attempt).
-    Returns ONLY incremental outputs â€” LangGraph's operator.add reducers
+    Returns ONLY incremental outputs — LangGraph's operator.add reducers
     accumulate them into global state as branches fan in.
     """
     sq: str = state.get("current_sub_question", "")
@@ -216,7 +249,7 @@ async def _process_sub_question(state: dict) -> dict:
 
     routing_entries: list = []
 
-    # â”€â”€ 1. Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 1. Search ─────────────────────────────────────────────────────────────
     search_out = await _searcher(state)
     new_results = search_out.get("search_results", [])
     new_failed  = search_out.get("failed_sub_questions", [])
@@ -224,7 +257,7 @@ async def _process_sub_question(state: dict) -> dict:
     all_new_results = list(new_results)
     all_new_failed  = list(new_failed)
 
-    # â”€â”€ 2. Zero-results retry (once) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 2. Zero-results retry (once) ─────────────────────────────────────────
     if sq in new_failed:
         routing_entries.append(
             f"process_sub_question | [{sq}] retry_searcher | zero_results=True"
@@ -243,7 +276,7 @@ async def _process_sub_question(state: dict) -> dict:
                 f"process_sub_question | [{sq}] retry failed | still zero results"
             )
 
-    # â”€â”€ 3. Read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 3. Read ───────────────────────────────────────────────────────────────
     # Build reader input: original Send arg state + this branch's search results.
     # Reader filters search_results by current_sub_question, so including global
     # state's results for other sub_questions is harmless (they get filtered out).
@@ -255,7 +288,7 @@ async def _process_sub_question(state: dict) -> dict:
     reader_out = await _reader(reader_input)
     new_facts  = reader_out.get("extracted_facts", [])
 
-    # â”€â”€ 4. Synthesize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── 4. Synthesize ─────────────────────────────────────────────────────────
     # Build synth input: reader_input + this branch's extracted facts.
     synth_input = {
         **reader_input,
@@ -272,7 +305,7 @@ async def _process_sub_question(state: dict) -> dict:
         latency_s=round(elapsed, 3),
     )
 
-    # â”€â”€ Return incremental outputs only (operator.add reducers merge them) â”€â”€â”€â”€
+    # ── Return incremental outputs only (operator.add reducers merge them) ────
     n_results  = len(all_new_results)
     n_facts    = len(new_facts)
     n_sections = len(synth_out.get("draft", []))
@@ -313,6 +346,12 @@ def _supervisor_node(state: ResearchState) -> dict:
     n_facts = len(state.get("extracted_facts", []))
     n_gaps  = len(state.get("unresolved_gaps", []))
 
+    if not state.get("draft"):
+        raise RuntimeError(
+            f"All {n_sq} research branch(es) failed — no draft sections were produced. "
+            "See branch_failed entries in logs/agent_traces.jsonl."
+        )
+
     log_entry = (
         f"supervisor | {n_sq} branch(es) complete -> debate"
         f" | facts={n_facts} gaps={n_gaps}"
@@ -321,6 +360,20 @@ def _supervisor_node(state: ResearchState) -> dict:
 
 
 # -- debate loop node ---------------------------------------------------------
+
+def _budget_stop(routing_entries, current_draft, session_id, round_num, reason) -> dict:
+    routing_entries.append(f"debate | round={round_num + 1} | BUDGET_EXHAUSTED ({reason})")
+    _debate_log.warning(f"debate stopped early: {reason}", step="debate_budget_exhausted", session_id=session_id)
+    return {
+        "critic_objections": [],
+        "debate_round": round_num,
+        "debate_resolved": True,
+        "debate_forced": False,
+        "debate_budget_exhausted": True,
+        "revised_draft": current_draft,
+        "routing_history": routing_entries,
+    }
+
 
 async def _debate_loop_node(state: ResearchState) -> dict:
     """
@@ -347,11 +400,24 @@ async def _debate_loop_node(state: ResearchState) -> dict:
     revised_draft (plain field, last-write-wins).  Writer reads
     revised_draft preferentially.
     """
-    max_rounds: int = settings.debate_max_rounds
+    # per-run override (UI opt-in) wins over the global default
+    max_rounds: int = int(state.get("review_rounds", settings.debate_max_rounds))
     current_draft: list[str] = list(state.get("draft", []))
     routing_entries: list[str] = []
     session_id_d: str = state.get("session_id", "")
 
+    if max_rounds <= 0:      # review disabled (e.g. ablation baseline): pass the draft straight through
+        return {
+            "critic_objections": [],
+            "debate_round": 0,
+            "debate_resolved": True,
+            "debate_forced": False,
+            "revised_draft": current_draft,
+            "routing_history": ["debate | SKIPPED (review loop off)"],
+        }
+
+    prev_objections: list[str] = []
+    minor_notes: list[str] = []
     for round_num in range(max_rounds):
         # ── 1. Critique current draft ─────────────────────────────────────────────
         critic_state = {
@@ -359,13 +425,19 @@ async def _debate_loop_node(state: ResearchState) -> dict:
             "draft": current_draft,
             "debate_round": round_num,
             "critic_objections": [],   # clear stale objections from prior round
+            "previous_objections": prev_objections,
         }
-        critic_out = await _critic(critic_state)
+        try:
+            critic_out = await _critic(critic_state)
+        except BudgetExceeded as exc:
+            return _budget_stop(routing_entries, current_draft, session_id_d, round_num, str(exc))
         objections: list[str] = critic_out.get("critic_objections", [])
+        blocking: int = critic_out.get("critic_blocking", len(objections))
+        minor_notes = list(critic_out.get("critic_minor", []))
 
         routing_entries.append(
             f"debate | round={round_num + 1}/{max_rounds}"
-            f" | objections={len(objections)}"
+            f" | objections={len(objections)} high={blocking} minor={len(minor_notes)}"
         )
         _debate_log.info(
             f"round {round_num + 1}/{max_rounds}: {len(objections)} objection(s)",
@@ -373,8 +445,26 @@ async def _debate_loop_node(state: ResearchState) -> dict:
             session_id=session_id_d,
         )
 
-        # ── 2. Organic resolution ───────────────────────────────────────────────
-        if not objections:
+        # ── 1b. Critic output unparseable: the draft was NOT reviewed ────────────
+        if critic_out.get("critic_review_skipped"):
+            routing_entries.append(f"debate | round={round_num + 1} | REVIEW_SKIPPED (critic output unparseable)")
+            _debate_log.warning(
+                "critic output unparseable; review skipped (not approved)",
+                step="debate_review_skipped",
+                session_id=session_id_d,
+            )
+            return {
+                "critic_objections": [],
+                "debate_round": round_num,
+                "debate_resolved": True,
+                "debate_forced": False,
+                "debate_review_skipped": True,
+                "revised_draft": current_draft,
+                "routing_history": routing_entries,
+            }
+
+        # ── 2. Organic resolution: nothing HIGH-severity left (low/medium may remain) ──
+        if blocking == 0:
             routing_entries.append(
                 f"debate | resolved=organic | round={round_num + 1}"
             )
@@ -388,6 +478,7 @@ async def _debate_loop_node(state: ResearchState) -> dict:
                 "debate_round": round_num + 1,
                 "debate_resolved": True,
                 "debate_forced": False,
+                "review_notes": objections + minor_notes,   # unaddressed medium/low points, disclosed
                 "revised_draft": current_draft,
                 "routing_history": routing_entries,
             }
@@ -416,18 +507,28 @@ async def _debate_loop_node(state: ResearchState) -> dict:
         # ── 4. Revise: Synthesizer in revision mode ─────────────────────────────
         # Revision mode is triggered by critic_objections being non-empty.
         # The Synthesizer returns {"revised_draft": [section, ...]}
+        prev_objections = list(objections)
         revision_state = {
             **state,
             "draft": current_draft,
             "critic_objections": objections,
         }
-        revision_out = await _synthesizer(revision_state)
+        try:
+            revision_out = await _synthesizer(revision_state)
+        except BudgetExceeded as exc:
+            return _budget_stop(routing_entries, current_draft, session_id_d, round_num, str(exc))
         revised = revision_out.get("revised_draft", [])
         if revised:
             current_draft = revised
-        routing_entries.append(
-            f"debate | round={round_num + 1} | revised | sections={len(current_draft)}"
-        )
+        if revision_out.get("revision_failed"):
+            routing_entries.append(
+                f"debate | round={round_num + 1} | REVISION_FAILED (kept previous draft)"
+                f" | sections={len(current_draft)}"
+            )
+        else:
+            routing_entries.append(
+                f"debate | round={round_num + 1} | revised | sections={len(current_draft)}"
+            )
 
     # Defensive fallback (loop should never exhaust without returning above)
     return {
@@ -440,12 +541,17 @@ async def _debate_loop_node(state: ResearchState) -> dict:
     }
 
 
-# â”€â”€ graph construction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── graph construction ────────────────────────────────────────────────────────
 
 
 # ── cross-run memory store node ───────────────────────────────────────────────
 
 async def _memory_node(state: ResearchState) -> dict:
+    tracker.pop(state.get("session_id", ""))   # usage was already copied into state by the Writer
+    return await _memory_node_inner(state)
+
+
+async def _memory_node_inner(state: ResearchState) -> dict:
     """
     Persist a compact record of the completed report to Redis for cross-run
     memory.  Runs as the final graph node (after Writer).
@@ -479,7 +585,7 @@ async def _memory_node(state: ResearchState) -> dict:
         )
         return {}
 
-def build_graph(checkpointer=None) -> StateGraph:
+def build_graph(checkpointer=None):  # -> CompiledStateGraph
     """Construct and compile the research pipeline.
 
     Args:
@@ -493,12 +599,12 @@ def build_graph(checkpointer=None) -> StateGraph:
     graph = StateGraph(ResearchState)
 
     # nodes
-    graph.add_node("planner",              _planner)
+    graph.add_node("planner",              _planner)  # type: ignore[type-var]  # nodes take partial-state mappings
     graph.add_node("plan_approval",        _plan_approval_node)
-    graph.add_node("process_sub_question", _process_sub_question)
+    graph.add_node("process_sub_question", _process_sub_question)  # type: ignore[type-var]
     graph.add_node("supervisor",           _supervisor_node)
     graph.add_node("debate",               _debate_loop_node)
-    graph.add_node("writer",               _writer)
+    graph.add_node("writer",               _writer)  # type: ignore[type-var]
     graph.add_node("memory_store",          _memory_node)
 
     # edges
@@ -514,7 +620,7 @@ def build_graph(checkpointer=None) -> StateGraph:
     return graph.compile(checkpointer=checkpointer)
 
 
-# â”€â”€ module-level compiled app (import-ready) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── module-level compiled app (import-ready) ──────────────────────────────────
 # Compiled with MemorySaver so interrupt() works out of the box.
 # ALL callers must pass config={"configurable": {"thread_id": ...}} to
 # every invoke() / ainvoke() call.  Automated pipelines should also set

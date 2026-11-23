@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, field_validator
 
 
 class Citation(BaseModel):

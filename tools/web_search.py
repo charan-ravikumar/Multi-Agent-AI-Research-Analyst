@@ -17,7 +17,6 @@ Field mapping (DDGS -> SearchResult):
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import List
 
 from ddgs.exceptions import (

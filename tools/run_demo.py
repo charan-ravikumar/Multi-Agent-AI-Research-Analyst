@@ -34,7 +34,7 @@ async def main() -> None:
 
     print(f"session_id : {session_id}")
     print(f"thread_id  : {thread_id}")
-    print(f"query      : What are the main applications of large language models in healthcare?")
+    print("query      : What are the main applications of large language models in healthcare?")
     print()
 
     initial = ResearchState(
@@ -49,7 +49,6 @@ async def main() -> None:
         contradictions=[],
         unresolved_gaps=[],
         draft=[],
-        critique=None,
         final_report="",
         iteration=0,
         routing_history=[],
@@ -59,7 +58,10 @@ async def main() -> None:
     cfg = {"configurable": {"thread_id": thread_id}}
 
     print("Running graph (real LLM + web search)...")
-    result = await app.ainvoke(initial, config=cfg)
+    from config import settings
+    from core import tracing
+    with tracing.run_span("demo", session_id, initial["query"]):
+        result = await asyncio.wait_for(app.ainvoke(initial, config=cfg), timeout=settings.run_timeout_seconds)
 
     # ── Save full state for eval_harness.py ──────────────────────────────────
     import json as _json
@@ -95,7 +97,7 @@ async def main() -> None:
         print(f"  ... [{len(report) - 800} more chars]")
 
     print(f"\n\nTo inspect this run:\n  python tools/trace_summary.py --session-id {session_id}")
-    print(f"Or simply:\n  python tools/trace_summary.py --last")
+    print("Or simply:\n  python tools/trace_summary.py --last")
 
 
 if __name__ == "__main__":
