@@ -19,6 +19,7 @@ env/
 # Environment/config secrets
 .env
 .env.*
+!.env.example
 
 # Test and tooling caches
 .pytest_cache/
@@ -28,3 +29,6 @@ env/
 
 # Generated runtime artifacts
 logs/
+
+# Scraped third-party page text: re-fetched on first run, cached locally, never committed.
+eval/fixtures/page_*.json

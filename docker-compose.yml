@@ -1,0 +1,32 @@
+# App + Redis.  Secrets come from ./.env (never baked into the image):
+#   cp .env.example .env   # then fill in GROQ_API_KEY / GEMINI_API_KEY (+ optional Langfuse keys)
+#   docker compose up --build
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0        # overrides any localhost value from .env
+    ports:
+      - "127.0.0.1:8501:8501"                # localhost only: the UI has no authentication
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs                     # JSONL traces survive restarts
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:
