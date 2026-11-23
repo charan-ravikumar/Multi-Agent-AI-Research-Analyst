@@ -1,0 +1,34 @@
+[
+ {
+  "sub_question": "How are large language models integrated into electronic health record systems and what data pipelines support their use?",
+  "url": "https://www.techtarget.com/healthtechanalytics/news/366590290/NYU-Large-Language-Model-Forecasts-Hospital-Readmissions-Length-of-Stay",
+  "title": "NYU Large Language Model Forecasts Hospital... | TechTarget",
+  "snippet": "Clinicians\u2019 language within each record was not standardized to help determine the model\u2019s ability to generate predictions without data reorganization.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "How are large language models integrated into electronic health record systems and what data pipelines support their use?",
+  "url": "https://www.frontiersin.org/journals/computer-science/articles/10.3389/fcomp.2025.1629725/full",
+  "title": "Frontiers | Large language models for depression recognition in...",
+  "snippet": "Large language models (LLMs) show strong potential but require domain-specific fine-tuning and struggle with non-textual cues. Since depression is often expressed through vocal tone and behavior rather than explicit text, relying on language alone is insufficient.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "How are large language models integrated into electronic health record systems and what data pipelines support their use?",
+  "url": "https://www.ibm.com/think/topics/prompt-engineering",
+  "title": "What Is Prompt Engineering? | IBM",
+  "snippet": "Familiarity with large language models: Understanding how large language models (LLMs) work, including their capabilities and limitations, is essential for crafting effective prompts and optimizing AI outputs.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "How are large language models integrated into electronic health record systems and what data pipelines support their use?",
+  "url": "https://trid.trb.org/View/2633691",
+  "title": "Exploring the roles of large language models in reshaping... - TRID",
+  "snippet": "Modern transportation systems face pressing challenges due to increasing demand, dynamic environments, and heterogeneous information integration. The rapid evolution of Large Language Models (LLMs) offers transformative potential to address these challenges.",
+  "full_text": "",
+  "source_type": "web"
+ }
+]

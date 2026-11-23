@@ -1,11 +1,7 @@
-# eval/ — evaluation layer
+# eval/ — reproducible evaluation of the research pipeline.
 #
-# Metrics:
-#   RAGAS   : faithfulness, answer_relevancy, context_precision
-#             context comes from raw search_results / extracted_facts in state
-#             judge LLM = Groq (Gemini fallback)
-#
-#   Custom  : citation_accuracy, source_diversity, hallucination_rate
-#
-# Ground truth: a small hand-written set of test queries + expected facts
-#               defined in eval/fixtures.py — no external benchmark dataset.
+#   harness.py   record/replay (search + page text), on-disk LLM cache, metrics, judge, aggregation
+#   run_eval.py  CLI:  uv run python -m eval.run_eval --configs no_debate,debate
+#   golden_queries.json   the query set
+#   fixtures/    recorded search results + fetched page text (committed: same evidence every run)
+#   results/     run outputs (JSON) ; RESULTS.md is the human-readable summary

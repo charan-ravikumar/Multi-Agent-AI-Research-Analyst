@@ -1,0 +1,34 @@
+[
+ {
+  "sub_question": "What manufacturing, delivery (e.g., viral vectors, lipid nanoparticles), and regulatory challenges are most commonly cited for CRISPR therapies in clinical development?",
+  "url": "https://en.wikipedia.org/wiki/CRISPR_gene_editing",
+  "title": "CRISPR gene editing - Wikipedia",
+  "snippet": "CRISPR-Cas systems are most commonly introduced into plants by Agrobacterium-mediated transformation, although particle bombardment and protoplast transformation are also used.[236].",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What manufacturing, delivery (e.g., viral vectors, lipid nanoparticles), and regulatory challenges are most commonly cited for CRISPR therapies in clinical development?",
+  "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13212821/",
+  "title": "Recent Developments in Lipid Nanoparticle-Mediated Delivery of...",
+  "snippet": "Lipid nanoparticles represent a compelling alternative to viral vectors for the delivery of various gene therapy modalities, including messenger RNA, small interfering RNA, and antisense oligonucleotides.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What manufacturing, delivery (e.g., viral vectors, lipid nanoparticles), and regulatory challenges are most commonly cited for CRISPR therapies in clinical development?",
+  "url": "https://www.frontiersin.org/journals/genome-editing/articles/10.3389/fgeed.2024.1509924/full",
+  "title": "Frontiers | Advances in CRISPR-Cas technology and its applications...",
+  "snippet": "In CRISPR-Cas systems, viral vectors are commonly employed to transport Cas9 and sgRNA components into target cells.Lipid Nanoparticles. Encapsulate nucleic acids, facilitate cellular entry via endocytosis. Biocompatible, allows cell-specific targeting (e.g., hepatocytes).",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What manufacturing, delivery (e.g., viral vectors, lipid nanoparticles), and regulatory challenges are most commonly cited for CRISPR therapies in clinical development?",
+  "url": "https://link.springer.com/article/10.1186/s12943-023-01925-5",
+  "title": "Comprehensive review of CRISPR-based gene editing: mechanisms...",
+  "snippet": "Efficient delivery of CRISPR-Cas9 components to target cells remains a challenge [119]. Methods such as viral vectors, lipid nanoparticles, and electroporation have been explored. Each approach has advantages and limitations in terms of efficiency, toxicity, and specificity [120].",
+  "full_text": "",
+  "source_type": "web"
+ }
+]

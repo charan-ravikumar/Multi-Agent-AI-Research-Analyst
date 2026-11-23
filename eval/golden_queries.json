@@ -1,0 +1,7 @@
+[
+  {"id": "q1_llm_healthcare", "query": "What are the main applications and risks of large language models in healthcare?"},
+  {"id": "q2_solid_state_batteries", "query": "How close are solid-state batteries to commercial electric vehicles, and what challenges remain?"},
+  {"id": "q3_crispr_therapies", "query": "What is the current state of CRISPR-based gene therapies in clinical use?"},
+  {"id": "q4_remote_work_productivity", "query": "What does the evidence say about the effect of remote work on productivity?"},
+  {"id": "q5_quantum_error_correction", "query": "What progress has been made in quantum error correction and what limits scaling?"}
+]

@@ -1,0 +1,34 @@
+[
+ {
+  "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?",
+  "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12189880/",
+  "title": "Large Language Models in Healthcare and Medical Applications ...",
+  "snippet": "This paper provides a systematic and in-depth examination of large language models (LLMs) in the healthcare domain, addressing their significant potential to transform medical practice through advanced natural language processing capabilities.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?",
+  "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12086438/",
+  "title": "Large Language Models in Medicine: Clinical Applications ...",
+  "snippet": "This study presents a comprehensive review of the clinical applications, technical challenges, and ethical considerations associated with using large language models (LLMs) in medicine.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?",
+  "url": "https://www.sciencedirect.com/science/article/pii/S2319417025000423",
+  "title": "Roles and potential of Large language models in healthcare: A ...",
+  "snippet": "Oct 1, 2025 \u00b7 LLMs can enhance patient education by providing accurate, readable, and empathetic responses, and they can streamline clinical workflows through efficient information extraction from unstructured data such as clinical notes.",
+  "full_text": "",
+  "source_type": "web"
+ },
+ {
+  "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?",
+  "url": "https://journals.sagepub.com/doi/10.1177/03000605251347556",
+  "title": "Clinical applications of large language models in medicine ...",
+  "snippet": "Jul 4, 2025 \u00b7 Large language models are increasingly being used in clinical medicine. Although most applications focus on data extraction and summarization, emerging studies are beginning to explore higher-level tasks such as clinical decision-making and multidisciplinary simulation.",
+  "full_text": "",
+  "source_type": "web"
+ }
+]

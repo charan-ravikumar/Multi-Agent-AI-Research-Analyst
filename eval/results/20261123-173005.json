@@ -1,0 +1,291 @@
+{
+ "meta": {
+  "groq_models": "openai/gpt-oss-20b / openai/gpt-oss-120b",
+  "judge_model": "qwen/qwen3.8-27b",
+  "new_tokens": 17606,
+  "llm_cache_hits": 79,
+  "llm_cache_misses": 6
+ },
+ "rows": [
+  {
+   "query_id": "q1_llm_healthcare",
+   "config": "no_debate",
+   "metrics": {
+    "facts": 21,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.95,
+    "uncited": 1,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 11,
+    "report_words": 1252,
+    "gaps": 17,
+    "debate_rounds": 0,
+    "debate_forced": false,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 15348,
+    "llm_calls_nominal": 12,
+    "wall_s": 1.4,
+    "judged_claims": 10,
+    "judge_faithfulness": 0.75,
+    "judge_unsupported_claims": 1,
+    "judge_completeness": 5,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  },
+  {
+   "query_id": "q1_llm_healthcare",
+   "config": "debate",
+   "metrics": {
+    "facts": 21,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 1.0,
+    "uncited": 0,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 10,
+    "report_words": 1200,
+    "gaps": 17,
+    "debate_rounds": 2,
+    "debate_forced": true,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 26731,
+    "llm_calls_nominal": 15,
+    "wall_s": 0.1,
+    "judged_claims": 10,
+    "judge_faithfulness": 0.75,
+    "judge_unsupported_claims": 1,
+    "judge_completeness": 4,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  },
+  {
+   "query_id": "q2_solid_state_batteries",
+   "config": "no_debate",
+   "metrics": {
+    "facts": 17,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.579,
+    "uncited": 8,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 10,
+    "report_words": 1146,
+    "gaps": 17,
+    "debate_rounds": 0,
+    "debate_forced": false,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 14340,
+    "llm_calls_nominal": 11,
+    "wall_s": 0.0,
+    "judged_claims": 10,
+    "judge_faithfulness": 0.8,
+    "judge_unsupported_claims": 0,
+    "judge_completeness": 4,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  },
+  {
+   "query_id": "q2_solid_state_batteries",
+   "config": "debate",
+   "metrics": {
+    "facts": 17,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 1.0,
+    "uncited": 0,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 3,
+    "report_words": 1011,
+    "gaps": 17,
+    "debate_rounds": 2,
+    "debate_forced": true,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 24328,
+    "llm_calls_nominal": 14,
+    "wall_s": 0.0,
+    "judged_claims": 8,
+    "judge_faithfulness": 0.938,
+    "judge_unsupported_claims": 0,
+    "judge_completeness": 3,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  },
+  {
+   "query_id": "q3_crispr_therapies",
+   "config": "no_debate",
+   "metrics": {
+    "facts": 20,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.842,
+    "uncited": 3,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 8,
+    "report_words": 1041,
+    "gaps": 14,
+    "debate_rounds": 0,
+    "debate_forced": false,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 16500,
+    "llm_calls_nominal": 12,
+    "wall_s": 0.1,
+    "judged_claims": 10,
+    "judge_faithfulness": 0.7,
+    "judge_unsupported_claims": 1,
+    "judge_completeness": 4,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  },
+  {
+   "query_id": "q3_crispr_therapies",
+   "config": "debate",
+   "metrics": {
+    "facts": 20,
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.739,
+    "uncited": 6,
+    "weakly_supported": 0,
+    "invalid_markers_removed": 0,
+    "sources_cited": 8,
+    "report_words": 1297,
+    "gaps": 14,
+    "debate_rounds": 2,
+    "debate_forced": true,
+    "review_notes": 0,
+    "branch_failures": 0,
+    "tokens_nominal": 29703,
+    "llm_calls_nominal": 15,
+    "wall_s": 0.1,
+    "judged_claims": 10,
+    "judge_faithfulness": 0.65,
+    "judge_unsupported_claims": 1,
+    "judge_completeness": 4,
+    "judge_clarity": 5,
+    "judge_provider": "groq",
+    "judge_model": "qwen/qwen3.8-27b",
+    "judge_independent": true
+   }
+  }
+ ],
+ "errors": [],
+ "aggregate": {
+  "configs": {
+   "no_debate": {
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.79,
+    "judge_faithfulness": 0.75,
+    "judge_completeness": 4.333,
+    "judge_clarity": 5,
+    "uncited": 4,
+    "weakly_supported": 0,
+    "judge_unsupported_claims": 0.667,
+    "report_words": 1146.333,
+    "tokens_nominal": 15396,
+    "llm_calls_nominal": 11.667,
+    "gaps": 16,
+    "debate_rounds": 0,
+    "review_notes": 0,
+    "sources_cited": 9.667
+   },
+   "debate": {
+    "fact_fidelity": 1.0,
+    "cited_ratio": 0.913,
+    "judge_faithfulness": 0.779,
+    "judge_completeness": 3.667,
+    "judge_clarity": 5,
+    "uncited": 2,
+    "weakly_supported": 0,
+    "judge_unsupported_claims": 0.667,
+    "report_words": 1169.333,
+    "tokens_nominal": 26920.667,
+    "llm_calls_nominal": 14.667,
+    "gaps": 16,
+    "debate_rounds": 2,
+    "review_notes": 0,
+    "sources_cited": 7
+   }
+  },
+  "paired": {
+   "fact_fidelity": {
+    "mean_delta": 0.0,
+    "other_better": 0,
+    "other_worse": 0,
+    "ties": 3,
+    "n": 3
+   },
+   "cited_ratio": {
+    "mean_delta": 0.123,
+    "other_better": 2,
+    "other_worse": 1,
+    "ties": 0,
+    "n": 3
+   },
+   "judge_faithfulness": {
+    "mean_delta": 0.029,
+    "other_better": 1,
+    "other_worse": 1,
+    "ties": 1,
+    "n": 3
+   },
+   "judge_completeness": {
+    "mean_delta": -0.667,
+    "other_better": 0,
+    "other_worse": 2,
+    "ties": 1,
+    "n": 3
+   },
+   "judge_clarity": {
+    "mean_delta": 0,
+    "other_better": 0,
+    "other_worse": 0,
+    "ties": 3,
+    "n": 3
+   },
+   "uncited": {
+    "mean_delta": -2,
+    "other_better": 2,
+    "other_worse": 1,
+    "ties": 0,
+    "n": 3
+   },
+   "weakly_supported": {
+    "mean_delta": 0,
+    "other_better": 0,
+    "other_worse": 0,
+    "ties": 3,
+    "n": 3
+   },
+   "judge_unsupported_claims": {
+    "mean_delta": 0,
+    "other_better": 0,
+    "other_worse": 0,
+    "ties": 3,
+    "n": 3
+   }
+  },
+  "n_queries": 3,
+  "judge_independent_runs": 6,
+  "total_runs": 6
+ }
+}
