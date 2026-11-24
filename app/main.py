@@ -47,6 +47,16 @@ import uuid
 # ── third-party ────────────────────────────────────────────────────────────────
 import streamlit as st
 
+from app.secrets_env import export_secrets_to_env  # noqa: E402
+
+# Streamlit Cloud secrets -> environment, BEFORE config.Settings is first imported (it is imported lazily
+# below).  Handles secrets pasted under a [section] header or in lower case.  Local runs have no
+# secrets.toml; that raises and is ignored (a local .env is used instead).
+try:
+    export_secrets_to_env(dict(st.secrets), os.environ)
+except Exception:  # noqa: BLE001 — no secrets configured
+    pass
+
 # ── constants ──────────────────────────────────────────────────────────────────
 LOG_FILE = ROOT / "logs" / "agent_traces.jsonl"
 POLL_INTERVAL = 3   # seconds between progress refreshes during research phase
@@ -300,8 +310,24 @@ def _render_routing_history(state: dict) -> None:
 
 # ── phase: idle ───────────────────────────────────────────────────────────────
 
+def _missing_provider_keys() -> list[str]:
+    from config import settings  # noqa: PLC0415
+    return [name for name, val in (("GROQ_API_KEY", settings.groq_api_key),
+                                   ("GEMINI_API_KEY", settings.gemini_api_key)) if not val]
+
+
 def _phase_idle() -> None:
     st.markdown("### What do you want to research?")
+    missing = _missing_provider_keys()
+    if len(missing) == 2:
+        st.error(
+            "**No LLM API key is configured**, so research cannot run. In Streamlit Cloud open "
+            "*App → Settings → Secrets* and add `GROQ_API_KEY = \"...\"` (and optionally "
+            "`GEMINI_API_KEY`) as plain top-level entries, then reboot the app.",
+            icon="🔑",
+        )
+    elif missing:
+        st.warning(f"{missing[0]} is not set; the fallback provider is unavailable.", icon="⚠")
     query = st.text_input(
         "Research topic",
         placeholder="e.g. Applications of large language models in healthcare",
@@ -316,7 +342,7 @@ def _phase_idle() -> None:
     submitted = st.button(
         "Start research →",
         type="primary",
-        disabled=not (query or "").strip(),
+        disabled=not (query or "").strip() or len(missing) == 2,
     )
     clean_query = None
     if submitted:
