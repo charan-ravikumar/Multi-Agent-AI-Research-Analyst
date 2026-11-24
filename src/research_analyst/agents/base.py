@@ -31,7 +31,7 @@ from collections.abc import Mapping
 
 from research_analyst import llm
 from research_analyst.config import settings
-from research_analyst.observability import tracing
+from research_analyst.observability import metrics, tracing
 from research_analyst.observability.logger import get_logger
 from research_analyst.observability import prompt_store
 from research_analyst.observability.usage import estimate_cost, tracker
@@ -141,6 +141,7 @@ class BaseAgent(ABC):
         system: str | None = None,
         state: StateLike,
         schema: Any = _DEFAULT,
+        on_text: Callable[[str], None] | None = None,
     ) -> tuple[str, dict]:
         """
         Call the LLM with this agent's tier and auto-log the result.  ``schema`` (a Pydantic model class) makes the
@@ -152,9 +153,10 @@ class BaseAgent(ABC):
         sys_text = next((m["content"] for m in prompt if m.get("role") == "system"), "") if isinstance(prompt, list) else (system or "")
 
         def call() -> tuple[str, dict]:
-            return llm.generate(prompt, tier=self.tier, system=system, return_usage=True,
+            extra = {"on_text": on_text} if on_text is not None else {}      # only the streaming caller passes it
+            return llm.generate(prompt, tier=self.tier, system=system, return_usage=True,  # type: ignore[call-overload]
                                 json_mode=self.json_mode or schema is not None, schema=schema,
-                                max_tokens=self.max_tokens, model=self.model)
+                                max_tokens=self.max_tokens, model=self.model, **extra)
 
         return await self._instrumented(call, state=state, input_=prompt, sys_text=sys_text,
                                         params={"json_mode": self.json_mode, "schema": getattr(schema, "__name__", None)})
@@ -254,6 +256,7 @@ class BaseAgent(ABC):
                 return parse(last_raw), ""
             except ValueError as exc:
                 last_error = str(exc)
+                metrics.inc("structured_retry", agent=self.name)
                 self.log.warning(
                     f"{step}: could not parse the answer (attempt {attempt}/{attempts}): {last_error}",
                     step=step,

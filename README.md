@@ -29,7 +29,7 @@ review loop) — not an autonomous agent swarm. Read [Limitations](#limitations)
 | Check | An **LLM judge** (a different model family) rates every cited claim supported / partial / unsupported against the passages it cites; **click any claim to see the verdict, the reason and the source passage**. Citation-marker counts are mechanical; word overlap is only the fallback if the judge is unavailable |
 | Review (opt-in) | Critic ⇄ Reviser loop, off by default (see [Evaluation](#evaluation)) |
 
-Around the pipeline: progress bar with live activity, **Stop** button, token/cost/time per run, coverage warnings
+Around the pipeline: progress bar with live activity, **the report streaming onto the page as the writer produces it**, a **Monitor tab** (run history, success rate, p50/p95 time, tokens by agent, claim-verdict trend, today's free-tier quota per model, retry/error counters), **Stop** button, token/cost/time per run, coverage warnings
 (problems the system detected) separate from **suggested follow-up research** (one click starts a new run),
 Langfuse tracing with quality scores, **versioned prompts (Langfuse Prompt Management; the repo text is the fallback)**, a token budget, and a start-page check that a configured model still exists.
 

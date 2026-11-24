@@ -4,6 +4,8 @@ from __future__ import annotations
 import streamlit as st
 
 from research_analyst.ui import state as S
+from research_analyst.ui import theme
+from research_analyst.ui.monitor import render_monitor
 from research_analyst.ui.about import ABOUT_MD
 from research_analyst.ui.gallery import render_gallery
 from research_analyst.ui.views import approval, cancelled, done, error, idle, planning, researching
@@ -22,20 +24,20 @@ PHASE_DISPATCH = {
 def main() -> None:
     st.set_page_config(
         page_title="AI Research Analyst",
-        page_icon="🔬",
         layout="wide",
     )
-    st.title("🔬 AI Research Analyst")
-    st.caption("Ask a question — get a sourced report. Sub-questions, search, reading and writing run in parallel.")
+    theme.apply()
 
     if "phase" not in st.session_state:
         st.session_state.phase = "idle"
 
-    tab_research, tab_gallery, tab_about = st.tabs(["🔬 Research", "📚 Sample reports", "ℹ️ About this app"])
+    tab_research, tab_gallery, tab_monitor, tab_about = st.tabs(["Research", "Sample reports", "Monitor", "About"])
     with tab_about:
         st.markdown(ABOUT_MD)
     with tab_gallery:
         render_gallery()
+    with tab_monitor:
+        render_monitor()
     with tab_research:
         handler = PHASE_DISPATCH.get(st.session_state.phase)
         if handler is None:

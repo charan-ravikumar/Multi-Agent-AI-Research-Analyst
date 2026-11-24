@@ -54,7 +54,7 @@ class ProgressTracker:
                 "stages": {"branches": [BRANCH_STEPS * n_branches, 0], "review": [review, 0],
                            "writing": [WRITING_UNITS, 0]},
                 "n_branches": n_branches, "branches_done": 0, "label": "Starting research…",
-                "t0": time.monotonic(), "t_end": None, "finished": False, "cancelled": False,
+                "t0": time.monotonic(), "t_end": None, "finished": False, "cancelled": False, "stream": "",
             }
             while len(self._s) > _MAX_SESSIONS:
                 self._s.popitem(last=False)
@@ -79,6 +79,13 @@ class ProgressTracker:
                 s["stages"][stage][1] = s["stages"][stage][0]
                 if label:
                     s["label"] = label
+
+    def stream(self, session_id: str, text: str) -> None:
+        """Latest text of the answer being written (cumulative), shown live by the UI."""
+        with self._lock:
+            s = self._s.get(session_id)
+            if s:
+                s["stream"] = text
 
     def set_label(self, session_id: str, label: str) -> None:
         with self._lock:
@@ -116,7 +123,8 @@ class ProgressTracker:
             frac = 1.0 if s["finished"] else min(0.99, done / total)
             end = s["t_end"] if s["t_end"] is not None else time.monotonic()
             return {"fraction": frac, "label": s["label"], "elapsed_s": end - s["t0"], "cancelled": s["cancelled"],
-                    "branches_done": s["branches_done"], "n_branches": s["n_branches"], "finished": s["finished"]}
+                    "branches_done": s["branches_done"], "n_branches": s["n_branches"], "finished": s["finished"],
+                    "stream": s.get("stream", "")}
 
     def pop(self, session_id: str) -> None:
         with self._lock:

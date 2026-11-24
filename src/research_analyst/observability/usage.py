@@ -29,7 +29,7 @@ def _prices() -> dict[str, tuple[float, float]]:
 
 
 def _blank() -> dict:
-    return {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    return {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "latency_s": 0.0}
 
 
 def estimate_cost(usage: dict) -> float | None:
@@ -69,6 +69,7 @@ class UsageTracker:
                 bucket["prompt_tokens"] += p
                 bucket["completion_tokens"] += c
                 bucket["total_tokens"] += t
+                bucket["latency_s"] = round(bucket["latency_s"] + float(usage.get("latency_s") or 0.0), 3)
             if usage.get("finish_reason") == "length":
                 e["truncated_calls"] += 1
 

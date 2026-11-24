@@ -79,6 +79,7 @@ def start_research(approved_sqs: list[str]) -> None:
     t = threading.Thread(
         target=research_thread,
         args=(S.get_graph(), cfg, approved_sqs, result_holder),
+        kwargs={"meta": {"query": st.session_state.get("query", ""), "review_rounds": st.session_state.get("review_rounds", 0)}},
         daemon=True,
     )
     t.start()

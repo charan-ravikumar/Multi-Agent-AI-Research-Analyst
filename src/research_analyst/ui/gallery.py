@@ -83,7 +83,8 @@ def render_gallery(directory: Path | None = None) -> None:
     models = e.get("models", {})
     st.caption(f"Generated {e.get('generated_at', '?')} with {models.get('strong', '?')} · review loop "
                f"{'on' if e.get('review_loop') else 'off'} · AI-generated: check the sources before relying on it.")
-    st.markdown(e["report"])
+    with st.container(key="sample_report"):
+        st.markdown(e["report"])
     C.render_citation_stats({"citation_stats": e.get("citation_stats", {})})
     st.divider()
     C.render_run_summary({"calls": (e.get("usage") or {}).get("calls"), "total_tokens": (e.get("usage") or {}).get("total_tokens") or 0,
@@ -94,10 +95,10 @@ def render_gallery(directory: Path | None = None) -> None:
     v = e.get("verify") or {}
     C.render_verify(v.get("claims", []), v.get("evidence", {}), key=f"gallery_{e['id']}", verdicts=v.get("verdicts"))
     if e.get("coverage"):
-        st.subheader("⚠ Coverage warnings")
+        st.subheader("Coverage warnings")
         for c in e["coverage"]:
             st.warning(c)
     if e.get("open_questions"):
-        st.subheader("🔎 Suggested follow-up research")
+        st.subheader("Suggested follow-up research")
         for o in e["open_questions"]:
             st.markdown(f"- **{o['text']}**  \n  <span style='opacity:.6'>from: {o['sub_question'][:90]}</span>", unsafe_allow_html=True)

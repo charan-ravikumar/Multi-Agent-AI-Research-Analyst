@@ -34,21 +34,18 @@ def render_debate_banner(state: dict) -> None:
         st.warning(
             "**The Critic review was skipped** (its output could not be parsed), so this "
             "draft was NOT independently reviewed.",
-            icon="⚠",
         )
     elif forced:
         st.warning(
             f"**Debate loop hit the round cap** ({rounds} round(s) completed).  "
             "The Critic still had unresolved objections when the limit was reached.  "
             "Unresolved gaps and contradictions are disclosed in the sections below.",
-            icon="🔁",
         )
     elif not rounds and not state.get("review_rounds"):
         st.caption("Review loop was off for this run (enable it on the start page).")
     elif rounds:
         st.success(
             f"Critic accepted the revised draft after {rounds} debate round(s).",
-            icon="✅",
         )
 
 
@@ -58,7 +55,6 @@ def render_degraded_banner(state: dict) -> None:
         st.warning(
             f"**Partial report:** {len(failed)} research branch(es) failed and were skipped. "
             "The affected sub-questions are listed under Unresolved gaps.",
-            icon="⚠",
         )
 
 
@@ -107,7 +103,7 @@ def _select_claim(sel_key: str, claim_id: int) -> None:
     st.session_state[sel_key] = claim_id
 
 
-_VERDICT_ICON = {"supported": "🟢", "partial": "🟡", "unsupported": "🔴"}
+_VERDICT_ICON = {"supported": ":green[●]", "partial": ":orange[●]", "unsupported": ":red[●]"}
 
 
 def render_judge_summary(verdicts: dict | None) -> None:
@@ -140,7 +136,7 @@ def render_verify(claims: list[dict], evidence: dict, key: str = "live", verdict
     from research_analyst.grounding.verify import Claim, support_for  # noqa: PLC0415
     if not claims:
         return
-    st.subheader("🔍 Verify the claims")
+    st.subheader("Verify the claims")
     st.caption("Click a sentence from the report to see the passage in the cited source(s) it rests on and whether an "
                "LLM judge found the claim supported by them. Highlighted words are shared between claim and source. "
                "Open the source to be sure.")
@@ -158,7 +154,7 @@ def render_verify(claims: list[dict], evidence: dict, key: str = "live", verdict
     with right:
         claim = next((c for c in claims if c["id"] == selected), claims[0])
         st.markdown(f"**Claim {claim['id']}:** {claim['text']}")
-        icons = {"strong": "🟢", "partial": "🟡", "weak": "🔴"}
+        icons = {"strong": ":green[●]", "partial": ":orange[●]", "weak": ":red[●]"}
         verdict = by_id.get(str(claim["id"]))
         if verdict:
             note = f" — {verdict['reason']}" if verdict.get("reason") else ""
@@ -170,7 +166,7 @@ def render_verify(claims: list[dict], evidence: dict, key: str = "live", verdict
                 title = f"[{s['ref']}] [{s['title']}]({s['url']})" if s["url"] else f"[{s['ref']}] {s['title']}"
                 backs = verdict and s["ref"] in (verdict.get("supporting_refs") or [])
                 overlap = f"word overlap: {s['label']} ({int(s['score'] * 100)}% of key terms)"
-                st.markdown(f"**{title}**  \n" + (f"✅ judge: this source backs the claim · {overlap}" if backs
+                st.markdown(f"**{title}**  \n" + (f"`BACKS` judge: this source backs the claim · {overlap}" if backs
                                                  else f"{icons[s['label']]} {overlap}"))
                 if s["passage_html"]:
                     st.markdown(f"<div style='font-size:0.92rem;line-height:1.5'>{s['passage_html']}</div>", unsafe_allow_html=True)
@@ -200,13 +196,13 @@ def render_gaps_and_contradictions(state: dict) -> None:
     st.divider()
 
     if curated["coverage"]:
-        st.subheader("⚠ Coverage warnings")
+        st.subheader("Coverage warnings")
         st.caption("Detected by the system while researching. They affect how far to trust the matching sections.")
         for c in curated["coverage"]:
             st.warning(c["text"])
 
     if curated["open_questions"]:
-        st.subheader("🔎 Suggested follow-up research")
+        st.subheader("Suggested follow-up research")
         st.caption(
             "Questions the gathered sources did not answer, suggested by the model "
             "(unverified, deduplicated"

@@ -24,13 +24,13 @@ def phase_done() -> None:
     final_report = state.get("final_report", "")
     if final_report:
         from research_analyst.safety.sanitize import sanitize_report_markdown  # noqa: PLC0415
-        st.markdown(sanitize_report_markdown(final_report), unsafe_allow_html=False)
+        with st.container(key="report"):
+            st.markdown(sanitize_report_markdown(final_report), unsafe_allow_html=False)
         C.render_citation_stats(state)
     else:
         st.warning(
             "No final report was produced.  "
             "Check the agent logs under logs/agent_traces.jsonl.",
-            icon="⚠",
         )
 
     if final_report:

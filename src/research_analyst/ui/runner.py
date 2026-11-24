@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 
-def research_thread(app_ref: Any, cfg: dict, resume_value: list[str], result_holder: dict) -> None:
+def research_thread(app_ref: Any, cfg: dict, resume_value: list[str], result_holder: dict, meta: dict | None = None) -> None:
     """
     Run the graph to completion inside a dedicated asyncio event loop.
 
@@ -17,6 +18,7 @@ def research_thread(app_ref: Any, cfg: dict, resume_value: list[str], result_hol
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     result_holder["loop"] = loop
+    t0 = time.monotonic()
     try:
         from langgraph.types import Command  # noqa: PLC0415
 
@@ -45,8 +47,23 @@ def research_thread(app_ref: Any, cfg: dict, resume_value: list[str], result_hol
     except Exception as exc:  # noqa: BLE001
         result_holder["error"] = str(exc)
     finally:
+        _record_run(cfg, result_holder, time.monotonic() - t0, meta or {})
         result_holder["done"] = True
         loop.close()
+
+
+def _record_run(cfg: dict, holder: dict, elapsed_s: float, meta: dict) -> None:
+    """Write the run's record for the Monitor page.  Never raises: monitoring must not break (or hide) a run."""
+    try:
+        from research_analyst.observability import runs  # noqa: PLC0415
+        from research_analyst.observability.usage import tracker  # noqa: PLC0415
+        sid = cfg.get("configurable", {}).get("session_id", "")
+        state, error = holder.get("result"), holder.get("error", "")
+        status = runs.classify(state, error, bool(holder.get("cancelled")))
+        runs.append(runs.build_record(sid, status, state, error, elapsed_s, meta.get("query", ""),
+                                      usage=tracker.summary(sid), extra={"review_rounds": meta.get("review_rounds", 0)}))
+    except Exception:  # noqa: BLE001, S110
+        pass
 
 
 def request_cancel(result_holder: dict | None) -> bool:

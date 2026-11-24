@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Any
 
 from google import genai
@@ -81,9 +82,12 @@ def _finish_and_usage(response: Any, model: str, latency: float) -> dict:
 
 def generate(
     messages: list[dict], *, model: str, temperature: float = 0.2, max_tokens: int = 2048,
-    json_mode: bool = False, schema: Any = None,
+    json_mode: bool = False, schema: Any = None, on_text: Callable[[str], None] | None = None,
 ) -> tuple[str, dict]:
-    """Text, or JSON constrained to ``schema`` (a Pydantic model class) when given.  Returns (text, usage)."""
+    """Text, or JSON constrained to ``schema`` (a Pydantic model class) when given.  Returns (text, usage).
+
+    With ``on_text`` the answer is STREAMED: the callback receives the full text so far after every chunk (cumulative, so a
+    retried attempt simply overwrites the previous one).  It is called from the calling thread and must be cheap."""
     system, contents = _split(messages)
     structured = schema is not None or json_mode
     cfg = types.GenerateContentConfig(
@@ -92,10 +96,31 @@ def generate(
         response_schema=schema, thinking_config=_thinking(),
     )
     t0 = time.perf_counter()
+    if on_text is not None:
+        return _stream(model, contents, cfg, t0, on_text)
     response = _get_client().models.generate_content(model=model, contents=contents, config=cfg)  # type: ignore[arg-type]
     usage = _finish_and_usage(response, model, time.perf_counter() - t0)
     logger.debug("Gemini response | %s", usage)
     return response.text or "", usage
+
+
+def _stream(model: str, contents: list[types.Content], cfg: types.GenerateContentConfig, t0: float,
+            on_text: Callable[[str], None]) -> tuple[str, dict]:
+    on_text("")                                           # a retried attempt starts from an empty screen
+    text, last = "", None
+    for chunk in _get_client().models.generate_content_stream(model=model, contents=contents, config=cfg):  # type: ignore[arg-type]
+        piece = chunk.text or ""
+        if piece:
+            text += piece
+            try:
+                on_text(text)
+            except Exception:  # noqa: BLE001 — a broken display callback must not fail the generation
+                logger.debug("on_text callback failed", exc_info=True)
+        last = chunk
+    usage = _finish_and_usage(last, model, time.perf_counter() - t0) if last is not None else {
+        "provider": "gemini", "model": model, "prompt_tokens": None, "completion_tokens": None,
+        "total_tokens": None, "latency_s": round(time.perf_counter() - t0, 3), "finish_reason": None}
+    return text, usage
 
 
 def tool_turn(

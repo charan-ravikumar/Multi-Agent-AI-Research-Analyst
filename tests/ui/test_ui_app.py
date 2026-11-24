@@ -19,8 +19,8 @@ def _app():
 def test_start_page_has_about_tab_and_example_questions():
     at = _app().run()
     assert not at.exception
-    assert [t.label for t in at.tabs] == ["🔬 Research", "📚 Sample reports", "ℹ️ About this app"]
-    about = " ".join(m.value for m in at.tabs[2].markdown)
+    assert [t.label for t in at.tabs] == ["Research", "Sample reports", "Monitor", "About"]
+    about = " ".join(m.value for m in at.tabs[3].markdown)
     assert "What is this?" in about and "How it works" in about and "Built with" in about
     samples = [b for b in at.button if b.key and b.key.startswith("sample_")]
     assert len(samples) == len(SAMPLE_QUESTIONS) == 5

@@ -28,6 +28,7 @@ os.environ["QUERY_REWRITE"] = "off"             # evidence-quality tests opt in 
 os.environ["ARXIV_ENABLED"] = "false"
 os.environ["DEBATE_MAX_ROUNDS"] = "3"          # review loop is opt-in in production defaults; tests exercise it
 os.environ["GEMINI_RATE_LIMITS"] = "{}"           # unit tests of the client opt in explicitly
+os.environ["RUNS_FILE"] = os.path.join(_TMP, "runs.jsonl")
 os.environ["LLM_QUOTA_FILE"] = os.path.join(_TMP, "llm_quota.json")
 os.environ["GEMINI_STRONG_AGENTS"] = "writer"
 os.environ["JUDGE_MODEL"] = ""
@@ -81,6 +82,9 @@ def reset_llm_state():
     _ax._last_call = 0.0
     client._breaker.reset()
     Path(os.environ["LLM_QUOTA_FILE"]).unlink(missing_ok=True)      # daily-request counter is per test
+    Path(os.environ["RUNS_FILE"]).unlink(missing_ok=True)           # run history is per test
+    from research_analyst.observability import metrics
+    metrics.reset()
     client._tpm.reset()
 
 

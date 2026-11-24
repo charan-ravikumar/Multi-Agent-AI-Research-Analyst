@@ -123,7 +123,8 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
                     "content": prompts.RETRY.format(issues="\n".join(f"- {i}" for i in last_issues)),
                 })
 
-            last_report, _usage = await self.llm_generate(messages, state=state)
+            last_report, _usage = await self.llm_generate(
+                messages, state=state, on_text=lambda t: progress.stream(session_id, t))   # live display only
             last_report = normalize_citation_brackets(last_report, max_ref=len(refs))   # 【1】 / [1, 2] -> [1][2]
 
             last_issues = _validate_report(last_report, contradictions, gaps, expect_citations=bool(refs))

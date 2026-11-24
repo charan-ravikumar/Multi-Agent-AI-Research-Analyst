@@ -8,7 +8,7 @@ from research_analyst.ui import state as S
 
 
 def phase_cancelled() -> None:
-    st.warning("**Research stopped.** No report was produced.", icon="⏹")
+    st.warning("**Research stopped.** No report was produced.")
     u = tracker.summary(st.session_state.get("session_id", ""))
     if u.get("calls"):
         st.caption(f"Used before stopping: {u['total_tokens']:,} tokens in {u['calls']} LLM calls "

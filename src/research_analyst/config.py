@@ -144,6 +144,8 @@ class Settings(BaseSettings):
     # ── Observability ─────────────────────────────────────────────────────────
     log_level: str = "INFO"
     log_file: str = "logs/agent_traces.jsonl"
+    # One JSON line per finished research run (status, time, tokens, quality) — feeds the Monitor page.
+    runs_file: str = "logs/runs.jsonl"
     # "json": one JSON object per line on stderr (for log shippers / Streamlit Cloud logs); "text": readable.
     log_format: str = "text"
     # Langfuse tracing (optional): enabled only when BOTH keys are set.

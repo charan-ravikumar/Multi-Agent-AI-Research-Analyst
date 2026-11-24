@@ -25,16 +25,15 @@ def phase_idle() -> None:
             "**No LLM API key is configured**, so research cannot run. In Streamlit Cloud open "
             "*App → Settings → Secrets* and add `GEMINI_API_KEY = \"...\"` as a plain top-level entry, "
             "then reboot the app.",
-            icon="🔑",
         )
     blocked = bool(missing)
     from research_analyst.llm import preflight  # noqa: PLC0415
     level, message = preflight.describe(preflight.check_models())
     if level == "error":
-        st.error(message, icon="🚫")
+        st.error(message)
         blocked = True
     elif level == "warning":
-        st.warning(message, icon="⚠")
+        st.warning(message)
     query = st.text_input(
         "Research topic",
         placeholder="e.g. Applications of large language models in healthcare",

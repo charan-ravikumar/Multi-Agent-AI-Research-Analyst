@@ -1,0 +1,11 @@
+# Theme tokens (Streamlit reads these before any CSS runs; ui/theme.py adds typography and component styling).
+[theme]
+base = "light"
+primaryColor = "#C8381A"
+backgroundColor = "#F4EFE6"
+secondaryBackgroundColor = "#EBE4D6"
+textColor = "#1B1A17"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

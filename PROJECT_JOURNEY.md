@@ -37,6 +37,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
 | Gemini-only + native tools + structured outputs | `llm/`, `agents/react_search.py`, `llm/schemas.py` | merged to `main` 2026-11-24 on your confirmation; Writer on 3.8 Flash not verified live |
+| Monitor tab + streaming + redesign | `observability/runs.py`, `ui/monitor.py`, `ui/theme.py` | branch `feature/monitoring-streaming-ui`, awaiting confirmation |
 | Prompt versioning | `observability/prompt_store.py` (Langfuse) | merged to `main` 2026-11-24 on your confirmation; **not yet run against real Langfuse** |
 
 ## 3. Timeline
@@ -192,6 +193,39 @@ cheapest credibility win was a real A/B. Hence this work.
 **Honest limits:** README measurements (88% cited claims etc.) are from the Groq era and are **not re-measured** on Gemini; quality of Flash Lite for synthesis is unproven; the RPD counter is local (not shared between machines).
 
 **Interview questions this adds:** Native tool calling vs prompting for JSON: what does the API guarantee and what must you still validate? What is `mode=ANY` and why use it? What are thought signatures and what breaks if you drop them? How do you design for hard free-tier limits (RPM/TPM/RPD) — wait, fail fast, or degrade? Why no fallback provider, and what are the risks? What do you lose when generator and judge share a model family? Structured output (constrained decoding) vs parse-and-retry: trade-offs?
+
+### 2026-11-24 — Feature branch `feature/monitoring-streaming-ui`: Monitor tab, streaming answer, redesign **(on branch, awaiting your confirmation)**
+
+**Context [DECIDED — your requests]:** (1) a small monitoring page in the app; (2) stream the answer on screen ("does it stream? if not add it" — it did **not** stream before: the Writer returned the whole text at once); (3) make the page look distinctive, not like a generic AI-generated page. Before this, you asked what a production-grade project would track; I listed the metric families (traceability, reliability, latency, cost, quality, agent behaviour, safety, eval drift) and you chose "a small monitoring page in the app" (no Prometheus/Grafana yet).
+
+**What was built**
+- **Per-run record** (`observability/runs.py`): one JSON line per run (status complete/partial/failed/cancelled, error kind, elapsed, tokens/calls by agent and model, model time per agent, cited ratio, judge verdict counts, branch failures, coverage warnings, ReAct step stats, config snapshot incl. models and prompt versions). Written from `ui/runner.py` in a `finally`, so failures and Stop clicks are recorded too. No report text is stored.
+- **Process counters** (`observability/metrics.py`) incremented in `llm/client.py` (successes, retries, errors by HTTP status, seconds waiting on rate limits, breaker opens) and in `generate_parsed` (structured-output corrective re-asks per agent). `llm.client.quota_status()` exposes today's per-model request use vs limits. `UsageTracker` now also sums latency per agent/model.
+- **Monitor tab** (`ui/monitor.py`): headline ledger (runs, completed %, median time + p95, median tokens, claims supported %, claims cited %), free-tier quota bars, reliability (status breakdown, failure causes, counters), run-time chart, tokens and model-time by agent, verdict share per run, recent-runs table, JSONL download.
+- **Streaming**: `gemini_client._stream` uses `generate_content_stream` and calls `on_text` with the cumulative text (a retry restarts from an empty string; a broken callback never fails generation). Plumbed through `llm.generate(on_text=)` → `BaseAgent.llm_generate` → Writer → `progress.stream()`. The researching page is now an `st.fragment(run_every=0.7s)` that re-renders itself (no full-page rerun, no flicker) and shows a "live draft" panel.
+- **Redesign** (`ui/theme.py`, `.streamlit/config.toml`): "field notebook" — warm paper, ink, one vermilion accent; Fraunces (display), Newsreader (reading), Hanken Grotesk (controls), JetBrains Mono (labels/numbers); newspaper masthead with double rule, mono tab labels, square ink-bordered buttons with an offset-shadow hover, ledger-style metrics, the report in an editorial card. Emoji chrome removed (status colours use `:green[●]` etc.). Checked visually with headless Chrome screenshots against a seeded run history.
+- Tests: 374 passing offline (`tests/unit/test_runs_and_metrics.py` adds 31: record shape, classification, error buckets, storage, aggregation, recording from the thread for complete/failed/cancelled runs, counters, quota status, streaming, Monitor page empty/with data); ruff and mypy clean.
+
+**Technical decisions** (INFERRED unless stated)
+
+| Decision | Why | Alternative & trade-off |
+|---|---|---|
+| JSONL file for run history | zero infrastructure, human-readable, append-only; fine for a demo-scale app | SQLite = queryable and safe under concurrency; Postgres/Prometheus = real production monitoring |
+| Counters in memory, not persisted | they describe the shared client's behaviour, not one run; resetting on restart is stated on the page | Persisting/pushing to Prometheus gives history across restarts |
+| Stream only the Writer | it is the one long, user-visible generation; other agents return JSON that is useless half-finished | Streaming every section = more calls held open, little value |
+| Stream raw text, replace with the verified report at the end | citation numbering/reference list are computed in code after generation; streaming them would require a streaming parser | Delay display until validated = no streaming |
+| `st.fragment(run_every)` instead of `sleep + st.rerun()` | partial reruns avoid full-page flicker and re-running the whole script every 0.7 s | Full rerun polling is simpler but visibly jumpy |
+| Judge/cited metrics read from the run record, not recomputed | the page never calls an LLM and works on history | — |
+| Custom CSS on Streamlit's DOM | the only way to get a distinct identity inside Streamlit | Fragile to Streamlit upgrades (class/test-id names change); a React front end would be sturdier |
+
+**Challenges / lessons**
+- CSS selectors written for older Streamlit silently did nothing (tabs and buttons are `div[data-testid=stTab]` and `[data-testid^=stBaseButton-]` in 1.59). Found only by looking at screenshots and inspecting the DOM — **verify visual work by rendering it**. Also: Streamlit here has no file watcher (watchdog missing), so a running dev server does not pick up edits to imported modules; restart it.
+- Test doubles that predate `on_text` broke 58 tests; fix was to pass `on_text` only when streaming (production code) and teach the fakes to accept it, instead of changing every test.
+- A shared temp file made tests order-dependent (run history, quota counter, counters) — each is now reset per test in `conftest.py`.
+
+**Honest limits:** the streaming path was tested with fakes and a scripted stream, **not against the live API**; the Monitor charts were screenshot-tested with seeded sample data, not real runs; the live-draft panel has no screenshot because it needs a real run; run history on Streamlit Cloud is ephemeral; "time per stage" is model time summed per agent, not wall-clock.
+
+**Interview questions this adds:** What would you monitor for an LLM application, and why those metrics? How do you separate per-request telemetry from process-level counters? What are the trade-offs of storing metrics in a file vs a TSDB? How does streaming interact with output post-processing (validation, citation numbering)? Why `st.fragment` for live updates? How do you test UI code that depends on a framework's internal DOM? What does "completed" mean as a success metric when partial reports exist?
 
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.

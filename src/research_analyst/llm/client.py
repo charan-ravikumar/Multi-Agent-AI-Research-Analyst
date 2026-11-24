@@ -39,6 +39,7 @@ from google.genai.errors import APIError as GeminiAPIError
 
 from research_analyst.config import settings
 from research_analyst.llm import gemini_client
+from research_analyst.observability import metrics
 from research_analyst.llm.tools import ToolSpec, ToolTurn
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ class _RateLimiter:
                     return entry
                 wait = 60.0 - (now - q[0][0]) + 0.05
             logger.info("rate limit: waiting %.1fs for %s", wait, model)
+            metrics.inc("rate_limit_wait_seconds", max(wait, 0.05), model=model)
             time.sleep(max(wait, 0.05))
 
     @staticmethod
@@ -195,6 +197,7 @@ class _Breaker:
                 self._open_until[key] = time.monotonic() + settings.llm_breaker_cooldown_seconds
                 logger.warning("circuit OPEN for %s (%d consecutive failures, cooldown %.0fs)",
                                key, n, settings.llm_breaker_cooldown_seconds)
+                metrics.inc("breaker_open", model=key)
 
     def reset(self) -> None:
         with self._lock:
@@ -262,11 +265,14 @@ def _run(model: str, est_tokens: int, call: Callable[[], T], tokens_of: Callable
             result = call()
             _tpm.settle(slot, tokens_of(result))
             _breaker.success(model)
+            metrics.inc("llm_success", model=model)
             return result
         except DailyQuotaExceeded:
+            metrics.inc("llm_error", model=model, status="daily_quota")
             raise
         except Exception as exc:  # noqa: BLE001 — classified below
             last = exc
+            metrics.inc("llm_error", model=model, status=_status_of(exc) or type(exc).__name__)
             if not _retryable(exc):
                 logger.warning("%s non-retryable error: %s: %s", model, type(exc).__name__, exc)
                 break
@@ -274,6 +280,7 @@ def _run(model: str, est_tokens: int, call: Callable[[], T], tokens_of: Callable
                 logger.warning("%s retries exhausted (%d/%d): %s", model, attempt, _MAX_RETRIES, exc)
                 break
             wait = _delay(attempt, exc)
+            metrics.inc("llm_retry", model=model)
             logger.warning("%s retryable error (attempt %d/%d) — waiting %.1fs: %s", model, attempt, _MAX_RETRIES, wait, exc)
             time.sleep(wait)
     _breaker.failure(model)
@@ -285,11 +292,11 @@ def _run(model: str, est_tokens: int, call: Callable[[], T], tokens_of: Callable
 @overload
 def generate(prompt: str | list[dict], *, tier: ModelTier = ..., system: str | None = ..., temperature: float | None = ...,
              max_tokens: int | None = ..., return_usage: Literal[False] = ..., json_mode: bool = ...,
-             schema: Any = ..., model: str | None = ...) -> str: ...
+             schema: Any = ..., model: str | None = ..., on_text: Callable[[str], None] | None = ...) -> str: ...
 @overload
 def generate(prompt: str | list[dict], *, tier: ModelTier = ..., system: str | None = ..., temperature: float | None = ...,
              max_tokens: int | None = ..., return_usage: Literal[True], json_mode: bool = ...,
-             schema: Any = ..., model: str | None = ...) -> tuple[str, dict]: ...
+             schema: Any = ..., model: str | None = ..., on_text: Callable[[str], None] | None = ...) -> tuple[str, dict]: ...
 def generate(
     prompt: str | list[dict],
     *,
@@ -301,10 +308,11 @@ def generate(
     json_mode: bool = False,
     schema: Any = None,
     model: str | None = None,
+    on_text: Callable[[str], None] | None = None,
 ) -> str | tuple[str, dict]:
     """Generate text, or schema-constrained JSON when ``schema`` (a Pydantic model class) is given.
 
-    ``json_mode`` without a schema asks only for valid JSON.  Returns text, or (text, usage) when ``return_usage``."""
+    ``on_text`` streams the answer (cumulative text after each chunk) for live display.  ``json_mode`` without a schema asks only for valid JSON.  Returns text, or (text, usage) when ``return_usage``."""
     temp = temperature if temperature is not None else settings.llm_temperature
     max_tok = max_tokens if max_tokens is not None else settings.llm_max_tokens
     messages = _build_messages(prompt, system)
@@ -313,7 +321,7 @@ def generate(
     text, usage = _run(
         name, est,
         lambda: gemini_client.generate(messages, model=name, temperature=temp, max_tokens=max_tok,
-                                       json_mode=json_mode, schema=schema),
+                                       json_mode=json_mode, schema=schema, on_text=on_text),
         lambda r: r[1].get("total_tokens"))
     return (text, usage) if return_usage else text
 
@@ -345,6 +353,17 @@ def _build_messages(prompt: str | list[dict], system: str | None) -> list[dict]:
 
 def daily_requests_used(model: str) -> int:
     return _quota.used(model)
+
+
+def quota_status() -> list[dict[str, Any]]:
+    """Today's request usage against each configured model's limits, for the monitoring page."""
+    try:
+        table = json.loads(settings.gemini_rate_limits or "{}")
+    except ValueError:
+        table = {}
+    models = list(dict.fromkeys([settings.gemini_fast_model, settings.gemini_strong_model, *table]))
+    return [{"model": m, "used": _quota.used(m), **{k: lim.get(k, 0) for k in ("rpd", "rpm", "tpm")}}
+            for m in models for lim in [_limits_for(m)]]
 
 
 __all__ = ["generate", "tool_turn", "ModelTier", "DailyQuotaExceeded", "GeminiAPIError", "model_for", "daily_requests_used"]

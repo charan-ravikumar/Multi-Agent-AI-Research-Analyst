@@ -128,7 +128,8 @@ class CachedLLM:
         self.miss_tokens = 0
 
     def __call__(self, prompt: Any, *, tier: Any = None, system: Any = None, temperature: Any = None, max_tokens: Any = None,
-                 return_usage: bool = False, json_mode: bool = False, schema: Any = None, model: Any = None) -> Any:
+                 return_usage: bool = False, json_mode: bool = False, schema: Any = None, model: Any = None,
+                 on_text: Callable[[str], None] | None = None) -> Any:
         key = _h(prompt, system, getattr(tier, "value", tier), temperature, max_tokens, json_mode,
                  getattr(schema, "__name__", None), model)
         p = self.dir / f"{key}.json"
@@ -145,6 +146,8 @@ class CachedLLM:
                 p.write_text(json.dumps({"text": text, "usage": usage}), "utf-8")
             self.misses += 1
             self.miss_tokens += int(usage.get("total_tokens") or 0)
+        if on_text is not None:
+            on_text(text)                                    # cached answers appear at once
         return (text, usage) if return_usage else text
 
 
