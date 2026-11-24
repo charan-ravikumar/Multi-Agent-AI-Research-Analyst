@@ -118,7 +118,7 @@ def _build_handlers() -> list[logging.Handler]:
 
     # 1. stderr (always active — plain text in dev, JSON in non-dev)
     stream_handler = logging.StreamHandler(sys.stderr)
-    if settings.environment == "development":
+    if settings.environment == "development" and settings.log_format != "json":
         # Human-readable in dev so the terminal isn't flooded with JSON
         stream_handler.setFormatter(
             logging.Formatter(

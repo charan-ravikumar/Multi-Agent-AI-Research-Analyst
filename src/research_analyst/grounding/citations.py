@@ -32,6 +32,72 @@ _MIN_SENTENCE_CHARS = 40
 _MIN_SHARED_TOKENS = 2
 
 
+_OPEN, _CLOSE = "【〔［", "】〕］"
+_DAGGER = re.compile(r"\[(\d+)†[^\]]*\]")
+_LIST = re.compile(r"\[(\d+(?:\s*[,;，、]\s*\d+)+)\]")
+_RANGE = re.compile(r"\[(\d+)\s*[-–—]\s*(\d+)\]")
+
+
+def normalize_citation_brackets(text: str, max_ref: int | None = None) -> str:
+    """Models do not reliably emit ASCII ``[1]``.  Seen in a real run: gpt-oss wrote ``【1】`` for every citation,
+    which silently erased all of them downstream.  Normalise at every LLM boundary:
+
+      【1】 〔1〕 ［1］     -> [1]
+      [1†source] [3†L5-L9] -> [1] [3]            (browsing-style suffixes)
+      [1, 2] [1;2]         -> [1][2]
+      [1-3]                -> [1][2][3]          (small ranges only)
+
+    ``max_ref`` limits list/range expansion to plausible reference numbers, so ``[2020, 2021]`` is untouched.
+    Markers like [S:ab12cd] / [F2] are never altered."""
+    for o in _OPEN:
+        text = text.replace(o, "[")
+    for c in _CLOSE:
+        text = text.replace(c, "]")
+    text = _DAGGER.sub(r"[\1]", text)
+
+    def expand_list(m: re.Match) -> str:
+        nums = [int(n) for n in re.findall(r"\d+", m.group(1))]
+        if max_ref is not None and any(n < 1 or n > max_ref for n in nums):
+            return m.group(0)
+        return "".join(f"[{n}]" for n in nums)
+
+    def expand_range(m: re.Match) -> str:
+        a, b = int(m.group(1)), int(m.group(2))
+        if not (1 <= a < b <= a + 8) or (max_ref is not None and b > max_ref):
+            return m.group(0)
+        return "".join(f"[{n}]" for n in range(a, b + 1))
+
+    return _RANGE.sub(expand_range, _LIST.sub(expand_list, text))
+
+
+_CLAIM_SECTIONS = ("executive summary", "key findings", "detailed analysis")
+
+
+def report_citation_stats(report_body: str) -> dict:
+    """Citation coverage of the FINAL report text (the pipeline's other stats describe the draft).
+
+    Only the *claim* sections are measured — Executive Summary, Key Findings, Detailed Analysis.  The
+    Contradictions / Knowledge Gaps sections (and their "Open question:" lines) describe what is NOT known and
+    are legitimately uncited, so counting them would understate how well the report's claims are sourced.
+    A body with no recognised headings is measured whole."""
+    has_headings = bool(re.search(r"^#{1,3}\s", report_body, flags=re.M))
+    in_claims = not has_headings
+    total = cited = 0
+    for line in report_body.splitlines():
+        line = line.strip()
+        if line.startswith("#"):
+            in_claims = any(s in line.lower() for s in _CLAIM_SECTIONS)
+            continue
+        if not line or not in_claims:
+            continue
+        for sent in _SENT_SPLIT.split(re.sub(r"^[-*•]\s+", "", line)):
+            if len(sent.strip()) >= _MIN_SENTENCE_CHARS:
+                total += 1
+                cited += 1 if _NUM.search(sent) else 0
+    return {"report_claim_sentences": total, "report_cited": cited,
+            "report_cited_ratio": round(cited / total, 3) if total else 0.0}
+
+
 def source_key(url: str) -> str:
     return hashlib.sha1(url.strip().encode("utf-8"), usedforsecurity=False).hexdigest()[:6]
 

@@ -8,6 +8,7 @@ from research_analyst.config import settings
 from research_analyst.observability.usage import BudgetExceeded
 from research_analyst.llm import ModelTier
 from research_analyst.models.search_result import SearchResult
+from research_analyst.retrieval.arxiv import fetch_pdf_text
 from research_analyst.retrieval.arxiv import relevant as arxiv_relevant
 from research_analyst.retrieval.arxiv import search_arxiv
 from research_analyst.retrieval.fetch import fetch_many
@@ -91,6 +92,8 @@ class SearcherAgent(BaseAgent):
 
         if results and settings.fetch_pages:
             results = await self._enrich_with_pages(results, sub_question, session_id, iteration)
+        if results and settings.arxiv_fulltext:
+            results = await self._enrich_with_arxiv_fulltext(results, sub_question, session_id, iteration)
 
         if not results:
             self.log.warning(
@@ -146,6 +149,34 @@ class SearcherAgent(BaseAgent):
             max_results=settings.arxiv_max_results,
         )
         return [r for r in found if arxiv_relevant(sub_question, r, settings.arxiv_min_overlap)]
+
+    async def _enrich_with_arxiv_fulltext(
+        self, results: list[SearchResult], sub_question: str, session_id: str, iteration: int
+    ) -> list[SearchResult]:
+        """Replace the abstract with the best passages of the PAPER for the top-N arXiv results."""
+        targets = [r.url for r in results if r.source_type == "arxiv"][: settings.arxiv_fulltext_top_n]
+        texts: dict[str, str] = {}
+        for url in targets:                         # sequential on purpose: arXiv asks for >= 3s between requests
+            text = await fetch_pdf_text(url)
+            if text:
+                texts[url] = text
+        out, n_ok = [], 0
+        for r in results:
+            text = texts.get(r.url)
+            if text:
+                passages = select_passages(sub_question, text, k=settings.fetch_passages_per_source,
+                                           max_chars=settings.evidence_chars_per_source)
+                if passages:
+                    r = r.model_copy(update={"full_text": passages})
+                    n_ok += 1
+            out.append(r)
+        self.log.info(
+            f"arXiv full text for {n_ok}/{len(targets)} paper(s)",
+            step="arxiv_fulltext",
+            session_id=session_id,
+            iteration=iteration,
+        )
+        return out
 
     async def _enrich_with_pages(
         self, results: list[SearchResult], sub_question: str, session_id: str, iteration: int

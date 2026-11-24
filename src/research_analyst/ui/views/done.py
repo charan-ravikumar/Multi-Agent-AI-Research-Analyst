@@ -1,8 +1,10 @@
 """Results page."""
 from __future__ import annotations
 
-
 import streamlit as st
+
+from research_analyst.grounding.verify import verify_payload
+from research_analyst.observability.progress import progress
 
 from research_analyst.ui import components as C
 from research_analyst.ui import state as S
@@ -31,7 +33,13 @@ def phase_done() -> None:
             icon="⚠",
         )
 
-    C.render_usage(state)
+    if final_report:
+        payload = verify_payload(final_report, state.get("search_results", []), state.get("extracted_facts", []),
+                                 state.get("references", []))
+        C.render_verify(payload["claims"], payload["evidence"], key="live")
+
+    snap = progress.snapshot(st.session_state.get("session_id", ""))
+    C.render_run_summary(state.get("usage_summary") or {}, snap["elapsed_s"] if snap else None)
 
     # Gaps and contradictions — the backend explicitly surfaces these;
     # the UI must not hide them.

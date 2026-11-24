@@ -164,11 +164,14 @@ async def process_sub_question_inner(state: dict, br: Any = None) -> dict:
     )
 
     # ── Return incremental outputs only (operator.add reducers merge them) ────
+    rs = reader_out.get("reader_stats") or {}
+    read_note = (f" read={rs['sources_read']}/{rs.get('sources_available', '?')}src in {rs['batches']} call(s)"
+                 f" stop={rs['stopped']}") if rs else ""
     n_results  = len(all_new_results)
     n_facts    = len(new_facts)
     n_sections = len(synth_out.get("draft", []))
     routing_entries.append(
-        f"branch | [{sq}] results={n_results} facts={n_facts} sections={n_sections}"
+        f"branch | [{sq}] results={n_results} facts={n_facts} sections={n_sections}{read_note}"
     )
     result: dict = {
         "search_results":       all_new_results,

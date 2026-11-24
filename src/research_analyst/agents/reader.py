@@ -11,6 +11,7 @@ from research_analyst.safety.sanitize import clean_untrusted, safe_url
 from research_analyst.llm import ModelTier
 from research_analyst.models import Fact
 from research_analyst.models.search_result import SearchResult
+from research_analyst.retrieval.passages import tokenize
 from research_analyst.agents.prompts import reader as prompts
 
 # ── prompts ───────────────────────────────────────────────────────────────────
@@ -31,7 +32,8 @@ class ReaderAgent(BaseAgent):
     LLM calls from N*R to N — the dominant cost and the cause of the Groq 429
     storms seen in logs/agent_traces.jsonl.  Evidence per source is the fetched
     BM25 passages when available, else the search snippet, capped at
-    settings.evidence_chars_per_source; at most settings.reader_max_sources sources
+    settings.evidence_chars_per_source; at most settings.reader_max_sources sources, read in batches of
+    settings.reader_batch_size with early stopping (see _read_until_enough)
     are sent (fetched pages first).
 
     An LLM/transport failure propagates (the branch wrapper records it); an
@@ -87,27 +89,47 @@ class ReaderAgent(BaseAgent):
             )
             return {**state, "extracted_facts": []}
 
-        facts = await self._extract(sources, sub_question, state)
-        n_used = len(sources)
-        if not facts and len(batches) > 1:
-            # The first batch held nothing usable (e.g. off-topic pages): try the next-best sources once
-            # before declaring the sub-question uncovered.
-            self.log.info(
-                f"no facts from the first {n_used} source(s); trying the next {len(batches[1])}",
-                step="reader_next_batch",
-                session_id=session_id,
-                iteration=iteration,
-            )
-            facts = await self._extract(batches[1], sub_question, state)
-            n_used += len(batches[1])
+        facts, stats = await self._read_until_enough(batches, sub_question, state)
+        stats["sources_available"] = len(my_results)
 
         self.log.info(
-            f"extracted {len(facts)} fact(s) from {n_used} source(s)",
+            f"extracted {len(facts)} fact(s) from {stats['sources_read']} source(s) in {stats['batches']} call(s); "
+            f"stopped: {stats['stopped']}",
             step="reader_done",
             session_id=session_id,
             iteration=iteration,
         )
-        return {**state, "extracted_facts": facts}
+        return {**state, "extracted_facts": facts, "reader_stats": stats}
+
+    async def _read_until_enough(
+        self, batches: list[list[SearchResult]], sub_question: str, state: StateLike
+    ) -> tuple[list[Fact], dict[str, Any]]:
+        """Read sources batch by batch (best sources first) and stop as soon as more reading is unlikely to help.
+
+        Stops when (a) enough distinct facts were collected, or (b) after the first batch, a further batch
+        added fewer than ``reader_min_new_facts`` NEW facts (the evidence has saturated).  A first batch that
+        yields nothing simply moves on to the next-best sources.  Facts that merely restate an earlier one
+        do not count as new.
+        """
+        collected: list[Fact] = []
+        sources_read = calls = 0
+        stopped = "no_more_sources"
+        for i, batch in enumerate(batches):
+            if i > 0:
+                self.log.info(f"reading the next {len(batch)} source(s)", step="reader_next_batch",
+                              session_id=state["session_id"], iteration=state.get("iteration", 0))
+            new = await self._extract(batch, sub_question, state)
+            sources_read += len(batch)
+            calls += 1
+            fresh = novel_facts(new, collected)
+            collected.extend(fresh)
+            if len(collected) >= settings.reader_target_facts:
+                stopped = "enough_facts"
+                break
+            if i >= 1 and len(fresh) < settings.reader_min_new_facts:
+                stopped = "saturated"
+                break
+        return collected, {"sources_read": sources_read, "batches": calls, "stopped": stopped}
 
     # ── private helpers ───────────────────────────────────────────────────────
 
@@ -142,12 +164,27 @@ def _evidence_text(r: SearchResult) -> str:
     return text[: settings.evidence_chars_per_source]
 
 
-def _source_batches(results: list[SearchResult], max_batches: int = 2) -> list[list[SearchResult]]:
-    """Usable sources, fetched pages first (richer evidence), split into batches of ``reader_max_sources``."""
+def _source_batches(results: list[SearchResult]) -> list[list[SearchResult]]:
+    """Usable sources, fetched pages first (richer evidence), capped at ``reader_max_sources`` and split into
+    batches of ``reader_batch_size``."""
     usable = [r for r in results if _evidence_text(r)]
     usable.sort(key=lambda r: 0 if r.full_text.strip() else 1)   # stable: keeps the Searcher's ranking
-    k = max(1, settings.reader_max_sources)
-    return [usable[i:i + k] for i in range(0, len(usable), k)][:max_batches]
+    usable = usable[: max(1, settings.reader_max_sources)]
+    k = max(1, settings.reader_batch_size)
+    return [usable[i:i + k] for i in range(0, len(usable), k)]
+
+
+def novel_facts(candidates: list[Fact], existing: list[Fact], threshold: float = 0.7) -> list[Fact]:
+    """Facts from ``candidates`` that do not merely restate one in ``existing`` (or an earlier candidate)."""
+    seen = [set(tokenize(f.content)) for f in existing]
+    out: list[Fact] = []
+    for f in candidates:
+        toks = set(tokenize(f.content))
+        if toks and any(len(toks & s) / len(toks | s) >= threshold for s in seen if s):
+            continue
+        seen.append(toks)
+        out.append(f)
+    return out
 
 
 def _sources_block(sources: list[SearchResult]) -> str:

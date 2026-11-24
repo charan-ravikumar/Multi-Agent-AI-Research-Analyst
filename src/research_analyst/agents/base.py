@@ -19,6 +19,7 @@ LangGraph registers each agent as a graph node via its __call__:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import contextlib
 import time
 import traceback
@@ -140,8 +141,12 @@ class BaseAgent(ABC):
         session_id = state["session_id"]
         if not self.budget_exempt:
             tracker.check(session_id)          # raises BudgetExceeded when the run's budget is spent
+        # A short hash of the system prompt identifies WHICH prompt text produced a trace, so a quality change
+        # in Langfuse can be tied to a prompt edit (shown as the generation's "version").
+        sys_text = next((m["content"] for m in prompt if m.get("role") == "system"), "") if isinstance(prompt, list) else (system or "")
+        prompt_version = hashlib.sha1(sys_text.encode("utf-8"), usedforsecurity=False).hexdigest()[:8] if sys_text else None
         with tracing.observation(
-            f"llm:{self.name}", as_type="generation", session_id=session_id, input=prompt,
+            f"llm:{self.name}", as_type="generation", session_id=session_id, input=prompt, version=prompt_version,
             model_parameters={"json_mode": self.json_mode, "max_tokens": self.max_tokens or 0,
                               "tier": self.tier.value},
         ) as gen:
@@ -164,7 +169,8 @@ class BaseAgent(ABC):
                     "input": usage.get("prompt_tokens"), "output": usage.get("completion_tokens"),
                     "total": usage.get("total_tokens")}.items() if v is not None},
                 cost_details={"total": cost} if cost is not None else None,
-                metadata={"provider": usage.get("provider"), "finish_reason": usage.get("finish_reason"),
+                metadata={"agent": self.name, "prompt_version": prompt_version, "provider": usage.get("provider"),
+                          "finish_reason": usage.get("finish_reason"),
                           "latency_s": usage.get("latency_s")},
             )
         tracker.record(session_id, self.name, usage)

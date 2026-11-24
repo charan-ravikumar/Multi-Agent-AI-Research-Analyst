@@ -54,7 +54,7 @@ class ProgressTracker:
                 "stages": {"branches": [BRANCH_STEPS * n_branches, 0], "review": [review, 0],
                            "writing": [WRITING_UNITS, 0]},
                 "n_branches": n_branches, "branches_done": 0, "label": "Starting research…",
-                "t0": time.monotonic(), "finished": False,
+                "t0": time.monotonic(), "t_end": None, "finished": False, "cancelled": False,
             }
             while len(self._s) > _MAX_SESSIONS:
                 self._s.popitem(last=False)
@@ -98,7 +98,13 @@ class ProgressTracker:
             if s:
                 for st in s["stages"].values():
                     st[1] = st[0]
-                s["finished"], s["label"] = True, "Done"
+                s["finished"], s["label"], s["t_end"] = True, "Done", time.monotonic()
+
+    def cancel(self, session_id: str) -> None:
+        with self._lock:
+            s = self._s.get(session_id)
+            if s:
+                s["cancelled"], s["label"], s["t_end"] = True, "Stopped by user", time.monotonic()
 
     def snapshot(self, session_id: str) -> dict | None:
         with self._lock:
@@ -108,7 +114,8 @@ class ProgressTracker:
             total = sum(v[0] for v in s["stages"].values()) or 1
             done = sum(v[1] for v in s["stages"].values())
             frac = 1.0 if s["finished"] else min(0.99, done / total)
-            return {"fraction": frac, "label": s["label"], "elapsed_s": time.monotonic() - s["t0"],
+            end = s["t_end"] if s["t_end"] is not None else time.monotonic()
+            return {"fraction": frac, "label": s["label"], "elapsed_s": end - s["t0"], "cancelled": s["cancelled"],
                     "branches_done": s["branches_done"], "n_branches": s["n_branches"], "finished": s["finished"]}
 
     def pop(self, session_id: str) -> None:

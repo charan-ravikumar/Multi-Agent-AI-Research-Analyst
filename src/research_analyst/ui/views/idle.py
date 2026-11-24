@@ -30,6 +30,14 @@ def phase_idle() -> None:
         )
     elif missing:
         st.warning(f"{missing[0]} is not set; the fallback provider is unavailable.", icon="⚠")
+    blocked = len(missing) == 2
+    from research_analyst.llm import preflight  # noqa: PLC0415
+    level, message = preflight.describe(preflight.check_groq_models())
+    if level == "error":
+        st.error(message, icon="🚫")
+        blocked = True
+    elif level == "warning":
+        st.warning(message, icon="⚠")
     query = st.text_input(
         "Research topic",
         placeholder="e.g. Applications of large language models in healthcare",
@@ -49,7 +57,7 @@ def phase_idle() -> None:
     submitted = st.button(
         "Start research →",
         type="primary",
-        disabled=not (query or "").strip() or len(missing) == 2,
+        disabled=not (query or "").strip() or blocked,
     )
     clean_query = None
     if submitted:

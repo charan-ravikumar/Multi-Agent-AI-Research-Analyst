@@ -5,7 +5,12 @@ from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.config import settings
-from research_analyst.grounding.citations import build_evidence, convert_fact_markers, strip_fact_markers
+from research_analyst.grounding.citations import (
+    build_evidence,
+    convert_fact_markers,
+    strip_fact_markers,
+)
+from research_analyst.grounding.citations import normalize_citation_brackets as _norm
 from research_analyst.grounding.gaps import COVERAGE, OPEN_QUESTION, make_item
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import clean_untrusted
@@ -208,7 +213,7 @@ class SynthesizerAgent(BaseAgent):
         ]
         synthesis, contradictions, gaps = await self._call_with_retry(messages, state)
         id_to_url = {f"F{i}": f.source_url for i, f in enumerate(facts, 1)}
-        synthesis, dropped = convert_fact_markers(synthesis, id_to_url)
+        synthesis, dropped = convert_fact_markers(_norm(synthesis), id_to_url)
         if dropped:
             self.log.warning(
                 f"dropped {dropped} citation(s) to non-existent fact ids",
@@ -324,7 +329,7 @@ def _parse_revision(raw: str) -> list[str]:
     sections = data["revised_sections"]
     if not isinstance(sections, list):
         raise ValueError(f"'revised_sections' must be a list, got {type(sections).__name__}")
-    result = [str(s).strip() for s in sections if str(s).strip()]
+    result = [_norm(str(s).strip()) for s in sections if str(s).strip()]
     if not result:
         raise ValueError("'revised_sections' list is empty")
     return result

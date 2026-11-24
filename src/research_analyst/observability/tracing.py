@@ -101,6 +101,7 @@ def observation(
     as_type: str = "span",
     session_id: str | None = None,
     input: Any = None,  # noqa: A002
+    tags: list[str] | None = None,
     **kw: Any,
 ) -> Iterator[_Handle]:
     """Open a nested observation; yields a _Handle.  Exceptions from the body are
@@ -112,8 +113,13 @@ def observation(
     stack = ExitStack()
     handle = _Handle()
     try:
-        if session_id and _propagate is not None:
-            stack.enter_context(_propagate(session_id=session_id))
+        if (session_id or tags) and _propagate is not None:
+            attrs: dict[str, Any] = {}
+            if session_id:
+                attrs["session_id"] = session_id
+            if tags:
+                attrs["tags"] = tags               # filterable in Langfuse (model, review on/off, env)
+            stack.enter_context(_propagate(**attrs))
         obs = stack.enter_context(
             client.start_as_current_observation(
                 name=name, as_type=as_type, input=_truncate(input), **kw
@@ -137,13 +143,51 @@ def observation(
 
 
 @contextmanager
-def run_span(phase: str, session_id: str, query: str = "") -> Iterator[_Handle]:
-    """Root span for one UI/CLI invocation; flushes on exit so short-lived threads don't lose data."""
-    with observation(f"run:{phase}", as_type="span", session_id=session_id, input={"query": query}) as h:
+def run_span(phase: str, session_id: str, query: str = "", tags: list[str] | None = None) -> Iterator[_Handle]:
+    """Root span for one UI/CLI invocation; flushes on exit so short-lived threads don't lose data.
+
+    Tagged with the environment and strong model so runs can be filtered/compared in Langfuse; callers add
+    their own (e.g. "review:on")."""
+    base = [f"env:{settings.environment}", f"model:{settings.groq_strong_model}"]
+    with observation(f"run:{phase}", as_type="span", session_id=session_id, input={"query": query},
+                     tags=[*base, *(tags or [])]) as h:
         try:
             yield h
         finally:
             flush()
+
+
+def run_scores(state: dict) -> dict[str, float]:
+    """Numeric quality/cost metrics of a finished run (pure function, so it is testable and reusable)."""
+    cs = state.get("citation_stats") or {}
+    us = state.get("usage_summary") or {}
+    gaps = state.get("gap_items") or []
+    out: dict[str, float] = {
+        "report_words": float(len((state.get("final_report") or "").split())),
+        "branch_failures": float(sum(1 for r in state.get("routing_history", []) if str(r).startswith("branch_failed"))),
+        "coverage_warnings": float(sum(1 for g in gaps if g.get("kind") == "coverage")),
+        "open_questions": float(sum(1 for g in gaps if g.get("kind") == "open_question")),
+        "review_loop_forced": 1.0 if state.get("debate_forced") else 0.0,
+    }
+    for src, key in [(cs, "cited_ratio"), (cs, "uncited"), (cs, "weakly_supported"), (cs, "sources_cited"),
+                     (us, "total_tokens"), (us, "calls"), (us, "estimated_cost_usd")]:
+        v = src.get(key)
+        if isinstance(v, (int, float)):
+            out["llm_calls" if key == "calls" else key] = float(v)
+    return out
+
+
+def record_scores(state: dict | None) -> None:
+    """Attach the run's metrics to the CURRENT Langfuse trace as scores (call inside ``run_span``)."""
+    client = _get_client()
+    if client is None or not state:
+        return
+    try:
+        trace_id = client.get_current_trace_id()
+        for name, value in run_scores(state).items():
+            client.create_score(name=name, value=value, trace_id=trace_id, data_type="NUMERIC")
+    except Exception as exc:  # noqa: BLE001 — scoring must never affect a run
+        _log.debug("langfuse score failed: %s", exc)
 
 
 def flush() -> None:

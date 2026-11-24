@@ -60,6 +60,8 @@ dateparser==1.5.1
     # via htmldate
 ddgs==9.14.4
     # via multi-agent-ai-research-analyst
+defusedxml==0.7.1
+    # via multi-agent-ai-research-analyst
 distro==1.9.0
     # via
     #   google-genai
@@ -252,6 +254,8 @@ pydantic-settings==2.14.2
     # via multi-agent-ai-research-analyst
 pydeck==0.9.3
     # via streamlit
+pypdf==7.1.1
+    # via multi-agent-ai-research-analyst
 python-dateutil==2.9.0.post0
     # via
     #   dateparser
@@ -338,6 +342,7 @@ typing-extensions==4.16.0
     #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
+    #   pypdf
     #   referencing
     #   starlette
     #   streamlit

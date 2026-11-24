@@ -64,30 +64,81 @@ def render_degraded_banner(state: dict) -> None:
 
 def render_citation_stats(state: dict) -> None:
     s = state.get("citation_stats") or {}
-    if not s or not s.get("claim_sentences"):
+    if not s:
+        return
+    if s.get("report_claim_sentences"):                    # measured on the FINAL report text
+        head = (f"Grounding check (automated, lexical — not a proof of correctness): "
+                f"{s.get('report_cited', 0)}/{s['report_claim_sentences']} sentences of the report cite a source")
+    elif s.get("claim_sentences"):
+        head = (f"Grounding check (automated, lexical — not a proof of correctness): "
+                f"{s.get('cited', 0)}/{s['claim_sentences']} draft claim sentences cite a source")
+    else:
         return
     st.caption(
-        f"Grounding check (automated, lexical — not a proof of correctness): "
-        f"{s.get('cited', 0)}/{s['claim_sentences']} claim sentences cite a source; "
-        f"{s.get('uncited', 0)} uncited, {s.get('weakly_supported', 0)} weakly supported "
-        f"(share <2 key terms with the cited facts); "
-        f"{s.get('invalid_markers_removed', 0)} invalid citation marker(s) removed; "
+        f"{head}; {s.get('uncited', 0)} uncited and {s.get('weakly_supported', 0)} weakly supported in the draft "
+        f"(share <2 key terms with the cited facts); {s.get('invalid_markers_removed', 0)} invalid marker(s) removed; "
         f"{s.get('sources_cited', 0)} of {s.get('sources_consulted', 0)} consulted sources cited."
     )
 
 
-def render_usage(state: dict) -> None:
-    u = state.get("usage_summary") or {}
-    if not u.get("calls"):
+def render_run_summary(usage: dict, elapsed_s: float | None = None, key: str = "live") -> None:
+    """Time, tokens, LLM calls and cost of one run, plus a per-agent / per-model breakdown."""
+    if not usage or not usage.get("calls"):
         return
-    cost = u.get("estimated_cost_usd")
-    with st.expander(
-        f"Run usage: {u['total_tokens']:,} tokens in {u['calls']} LLM calls"
-        + (f" (≈ ${cost:.4f})" if cost is not None else ""),
-        expanded=False,
-    ):
-        st.json({"by_agent": u.get("by_agent"), "by_model": u.get("by_model"),
-                 "truncated_calls": u.get("truncated_calls"), "budget": u.get("budget") or "off"})
+    cost = usage.get("estimated_cost_usd")
+    c1, c2, c3, c4 = st.columns(4)
+    if elapsed_s:
+        mins, secs = divmod(int(elapsed_s), 60)
+        c1.metric("Time", f"{mins}:{secs:02d}")
+    c2.metric("Tokens", f"{usage['total_tokens']:,}")
+    c3.metric("LLM calls", f"{usage['calls']}")
+    if cost is not None:
+        c4.metric("Estimated cost", f"${cost:.4f}", help="Estimated from the configured LLM_PRICE_PER_1M_TOKENS table.")
+    else:
+        c4.metric("Cost", "$0 (free tier)", help="This deployment runs on free-tier API keys. Tokens are counted; set "
+                  "LLM_PRICE_PER_1M_TOKENS (USD per 1M input/output tokens, per model) to see a paid-rate estimate.")
+    with st.expander("Usage breakdown", expanded=False):
+        st.json({"by_agent": usage.get("by_agent"), "by_model": usage.get("by_model"),
+                 "truncated_calls": usage.get("truncated_calls"), "token_budget": usage.get("budget") or "off"},
+                expanded=2)
+
+
+def _select_claim(sel_key: str, claim_id: int) -> None:
+    st.session_state[sel_key] = claim_id
+
+
+def render_verify(claims: list[dict], evidence: dict, key: str = "live") -> None:
+    """Click a claim sentence -> see the exact source passage(s) it rests on, shared terms highlighted."""
+    from research_analyst.grounding.verify import Claim, support_for  # noqa: PLC0415
+    if not claims:
+        return
+    st.subheader("🔍 Verify the claims")
+    st.caption("Click a sentence from the report to see the passage in the cited source(s) it rests on. "
+               "Highlighted words are shared between the claim and the source. The label measures word overlap, "
+               "not truth — open the source to be sure.")
+    sel_key = f"verify_sel_{key}"
+    selected = st.session_state.get(sel_key, claims[0]["id"])
+    left, right = st.columns([5, 6])
+    with left, st.container(height=520, border=False):
+        for c in claims:
+            text = c["text"]
+            st.button(f"{c['id']}. {text[:118]}{'…' if len(text) > 118 else ''}", key=f"{key}_claim_{c['id']}",
+                      type="primary" if c["id"] == selected else "secondary", use_container_width=True,
+                      on_click=_select_claim, args=(sel_key, c["id"]))
+    with right:
+        claim = next((c for c in claims if c["id"] == selected), claims[0])
+        st.markdown(f"**Claim {claim['id']}:** {claim['text']}")
+        icons = {"strong": "🟢", "partial": "🟡", "weak": "🔴"}
+        for s in support_for(Claim(claim["id"], claim["text"], tuple(claim["refs"])), evidence):
+            with st.container(border=True):
+                title = f"[{s['ref']}] [{s['title']}]({s['url']})" if s["url"] else f"[{s['ref']}] {s['title']}"
+                st.markdown(f"**{title}**  \n{icons[s['label']]} word-overlap support: **{s['label']}** ({int(s['score'] * 100)}% of the claim's key terms)")
+                if s["passage_html"]:
+                    st.markdown(f"<div style='font-size:0.92rem;line-height:1.5'>{s['passage_html']}</div>", unsafe_allow_html=True)
+                else:
+                    st.caption("No passage text was kept for this source.")
+                if s["fact_html"]:
+                    st.markdown(f"<div style='font-size:0.85rem;opacity:.75'>Extracted fact: {s['fact_html']}</div>", unsafe_allow_html=True)
 
 
 def start_followup(question: str) -> None:

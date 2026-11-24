@@ -36,6 +36,8 @@ def _save_state(path: Path, text: str) -> int:
 
 
 async def main() -> None:
+    from research_analyst.llm.preflight import assert_models_available
+    assert_models_available()           # fail before spending quota if a configured model was retired
     session_id = str(uuid.uuid4())
     thread_id  = str(uuid.uuid4())
 
@@ -70,6 +72,7 @@ async def main() -> None:
     from research_analyst.observability import tracing
     with tracing.run_span("demo", session_id, initial["query"]):
         result = await asyncio.wait_for(app.ainvoke(initial, config=cfg), timeout=settings.run_timeout_seconds)
+        tracing.record_scores(result)
 
     # ── Save full state for eval_harness.py ──────────────────────────────────
     import json as _json

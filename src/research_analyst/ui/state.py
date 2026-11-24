@@ -39,3 +39,11 @@ def reset_state() -> None:
     is intentionally preserved — no need to re-import on each run."""
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
+
+
+def cancel_run() -> None:
+    """Button callback: stop the current research run."""
+    from research_analyst.observability.progress import progress  # noqa: PLC0415
+    from research_analyst.ui.runner import request_cancel  # noqa: PLC0415
+    if request_cancel(st.session_state.get("bg_result")):
+        progress.cancel(st.session_state.get("session_id", ""))

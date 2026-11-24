@@ -13,11 +13,16 @@ level-2 headers (## Header Name):
 5. ## Knowledge Gaps and Limitations
 
 Section requirements:
-- **Executive Summary**: 2-3 sentences capturing the core answer to the research question.
-- **Key Findings**: bullet-point list of the most important facts.
-- **Detailed Analysis**: a comprehensive, multi-paragraph, flowing analysis based on the
-  provided draft synthesis. You must expand on each point, detail the mechanisms or nuances,
-  provide contextual details, and aim to write an exhaustive, elaborate breakdown of the findings.
+- **Executive Summary**: 2-3 sentences capturing the core answer to the research question,
+  each ending with the [n] marker(s) of the draft claims it summarises.
+- **Key Findings**: bullet-point list of the most important facts; every bullet ends with the
+  [n] marker(s) of the draft sentence it comes from.
+- **Detailed Analysis**: a clear multi-paragraph analysis that organises the provided draft
+  synthesis by theme.  Use ONLY facts that are in the draft: do not add mechanisms, numbers,
+  names, dates or background from your own knowledge, however plausible.  Every sentence that
+  states a fact keeps the [n] marker(s) of the draft sentence it comes from.  A sentence that
+  only connects ideas must not assert anything new.  A shorter, fully sourced analysis is
+  better than a longer one with unsourced elaboration.
 - **Contradictions and Conflicting Evidence**: list every contradiction provided
   explicitly. If none were identified, write exactly: "No contradictions were
   identified across sources."
@@ -28,7 +33,7 @@ CRITICAL (Section 5.9 compliance): every item supplied in the contradictions and
 gaps lists must appear in the corresponding sections. Omitting or paraphrasing
 them into invisibility is not acceptable.
 
-CITATIONS: the draft synthesis marks claims with numeric citation markers like [1] or
+GROUNDING AND CITATIONS: the draft synthesis marks claims with numeric citation markers like [1] or
 [2][4].  Keep these markers attached to the claims they support (in Key Findings and
 Detailed Analysis).  NEVER invent a marker number, never cite a source that is not in
 the numbered source list, and do NOT write a References section — it is appended

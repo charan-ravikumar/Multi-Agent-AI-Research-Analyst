@@ -5,7 +5,8 @@ import streamlit as st
 
 from research_analyst.ui import state as S
 from research_analyst.ui.about import ABOUT_MD
-from research_analyst.ui.views import approval, done, error, idle, planning, researching
+from research_analyst.ui.gallery import render_gallery
+from research_analyst.ui.views import approval, cancelled, done, error, idle, planning, researching
 
 PHASE_DISPATCH = {
     "idle":              idle.phase_idle,
@@ -14,6 +15,7 @@ PHASE_DISPATCH = {
     "researching":       researching.phase_researching,
     "done":              done.phase_done,
     "error":             error.phase_error,
+    "cancelled":         cancelled.phase_cancelled,
 }
 
 
@@ -29,9 +31,11 @@ def main() -> None:
     if "phase" not in st.session_state:
         st.session_state.phase = "idle"
 
-    tab_research, tab_about = st.tabs(["🔬 Research", "ℹ️ About this app"])
+    tab_research, tab_gallery, tab_about = st.tabs(["🔬 Research", "📚 Sample reports", "ℹ️ About this app"])
     with tab_about:
         st.markdown(ABOUT_MD)
+    with tab_gallery:
+        render_gallery()
     with tab_research:
         handler = PHASE_DISPATCH.get(st.session_state.phase)
         if handler is None:

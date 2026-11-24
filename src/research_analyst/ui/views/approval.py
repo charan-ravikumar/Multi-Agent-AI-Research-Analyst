@@ -72,7 +72,8 @@ def phase_awaiting_approval() -> None:
 def start_research(approved_sqs: list[str]) -> None:
     """Kick off the research background thread and transition to 'researching'."""
     cfg           = {"configurable": {"thread_id": st.session_state.thread_id,
-                                      "session_id": st.session_state.session_id}}
+                                      "session_id": st.session_state.session_id},
+                     "tags": ["review:on" if st.session_state.get("review_rounds") else "review:off"]}
     result_holder = {"done": False}
     progress.start(st.session_state.session_id, len(approved_sqs), st.session_state.get("review_rounds", 0))
     t = threading.Thread(

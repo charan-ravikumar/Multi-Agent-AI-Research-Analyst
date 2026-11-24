@@ -30,6 +30,9 @@ def phase_researching() -> None:
         else:
             st.progress(0.0, text="Starting…")
 
+        st.button("⏹ Stop research", key="stop_research", on_click=S.cancel_run,
+                  help="Cancels the run. Requests already sent to the model finish in the background.")
+
         events = read_trace_tail(st.session_state.session_id)
         with st.expander("Technical activity log", expanded=False):
             for ev in reversed(events):
@@ -46,6 +49,11 @@ def phase_researching() -> None:
         return
 
     # ── thread finished ────────────────────────────────────────────────────
+    if result_holder.get("cancelled"):
+        st.session_state.phase = "cancelled"
+        st.rerun()
+        return
+
     if result_holder.get("error"):
         st.session_state.phase = "error"
         st.session_state.error = result_holder["error"]

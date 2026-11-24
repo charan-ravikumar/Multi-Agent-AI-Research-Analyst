@@ -102,7 +102,10 @@ class Settings(BaseSettings):
     reader_max_concurrent_llm_calls: int = 3
     # Max sources sent to the (batched) Reader per sub-question and the evidence
     # text budget per source, to stay inside free-tier TPM limits.
-    reader_max_sources: int = 6
+    reader_max_sources: int = 9          # hard cap on sources read per sub-question
+    reader_batch_size: int = 3           # sources per LLM call; reading stops early (see agents/reader.py)
+    reader_target_facts: int = 6         # stop once this many distinct facts are collected
+    reader_min_new_facts: int = 2        # stop when a later batch adds fewer new facts than this
     evidence_chars_per_source: int = 1200
     evidence_block_max_chars: int = 6000   # evidence list shown to the Critic/reviser
     # ── Page fetching (evidence beyond search-result snippets) ─────────────────
@@ -123,6 +126,12 @@ class Settings(BaseSettings):
     arxiv_max_results: int = 3
     arxiv_min_overlap: int = 3               # shared key terms (sub-question vs title+abstract) required
     arxiv_min_interval_seconds: float = 3.0  # arXiv API etiquette: >= 3s between requests
+    # Full text: download the PDF of the top-N relevant arXiv papers, extract text (pypdf) and keep the BM25
+    # best passages for the sub-question — instead of the abstract alone.
+    arxiv_fulltext: bool = True
+    arxiv_fulltext_top_n: int = 2
+    arxiv_pdf_max_bytes: int = 8_000_000
+    arxiv_pdf_max_pages: int = 15
     # ── Research planner ──────────────────────────────────────────────────────
     # Number of sub-questions the Planner must produce.  Each sub-question costs
     # ~reader results + 1 synthesis call, so on the Groq free tier (6,000 TPM on
@@ -133,6 +142,8 @@ class Settings(BaseSettings):
     # ── Observability ─────────────────────────────────────────────────────────
     log_level: str = "INFO"
     log_file: str = "logs/agent_traces.jsonl"
+    # "json": one JSON object per line on stderr (for log shippers / Streamlit Cloud logs); "text": readable.
+    log_format: str = "text"
     # Langfuse tracing (optional): enabled only when BOTH keys are set.
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""

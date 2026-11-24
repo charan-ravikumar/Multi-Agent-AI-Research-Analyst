@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
+import groq
 from groq import Groq
 
 # ── INTERNAL MODULE — do not import from agents or tools ─────────────────────
@@ -28,6 +29,16 @@ def _get_client() -> Groq:
     return _client
 
 
+def _failed_json_generation(exc: groq.BadRequestError) -> str | None:
+    """The model output Groq rejected in JSON mode (HTTP 400, code ``json_validate_failed``), or None."""
+    body = getattr(exc, "body", None)
+    err = body.get("error", body) if isinstance(body, dict) else None
+    if isinstance(err, dict) and err.get("code") == "json_validate_failed":
+        text = err.get("failed_generation")
+        return text if isinstance(text, str) and text.strip() else None
+    return None
+
+
 def generate(
     messages: list[dict],
     *,
@@ -51,13 +62,25 @@ def generate(
         # (the prompt must mention JSON; every JSON stage here does).
         kwargs["response_format"] = {"type": "json_object"}
 
-    completion = client.chat.completions.create(
-        model=model,
-        messages=messages,  # type: ignore[arg-type]  # plain role/content dicts are what the API takes
-        temperature=temperature,
-        max_tokens=max_tokens,
-        **kwargs,
-    )
+    try:
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,  # type: ignore[arg-type]  # plain role/content dicts are what the API takes
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+    except groq.BadRequestError as exc:
+        salvaged = _failed_json_generation(exc)
+        if salvaged is None:
+            raise
+        # JSON mode rejected the model's answer server-side but returned it.  Hand it to the tolerant parser
+        # (it repairs literal newlines / trailing text) instead of paying for a second generation; if it is
+        # genuinely broken (e.g. truncated) the agent's corrective retry takes over.
+        logger.warning("Groq json_validate_failed; salvaging %d chars of failed_generation", len(salvaged))
+        return salvaged, {"provider": "groq", "model": model, "prompt_tokens": None, "completion_tokens": None,
+                          "total_tokens": None, "latency_s": round(time.perf_counter() - t0, 3),
+                          "finish_reason": "json_validate_failed"}
 
     latency = time.perf_counter() - t0
     usage = {

@@ -5,12 +5,13 @@ from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.llm import ModelTier
-from research_analyst.grounding.gaps import curate_gaps, gap_texts
+from research_analyst.grounding.gaps import COVERAGE, curate_gaps, gap_texts, make_item
 from research_analyst.observability.progress import progress
 from research_analyst.safety.sanitize import sanitize_report_markdown
 from research_analyst.observability.usage import tracker
 from research_analyst.grounding.citations import (
-    analyze, cited_numbers, number_citations, render_references, verify_numbered,
+    analyze, cited_numbers, normalize_citation_brackets, number_citations, render_references, report_citation_stats,
+    verify_numbered,
 )
 from research_analyst.models.citation import Citation
 from research_analyst.agents.prompts import writer as prompts
@@ -124,8 +125,9 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
                 })
 
             last_report, _usage = await self.llm_generate(messages, state=state)
+            last_report = normalize_citation_brackets(last_report, max_ref=len(refs))   # 【1】 / [1, 2] -> [1][2]
 
-            last_issues = _validate_report(last_report, contradictions, gaps)
+            last_issues = _validate_report(last_report, contradictions, gaps, expect_citations=bool(refs))
             if not last_issues:
                 break
 
@@ -158,6 +160,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         report = sanitize_report_markdown(f"{body}\n\n{render_references(refs, cited)}")
         stats = {
             **{k: v for k, v in grounding.items() if k != "problems"},
+            **report_citation_stats(body),                      # coverage of the FINAL text (the line above is the draft)
             "unknown_markers": grounding["unknown_markers"] + unknown_markers,
             "invalid_markers_removed": removed,
             "sources_cited": len(cited),
@@ -178,8 +181,14 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             iteration=iteration,
             usage=usage_summary,
         )
-        return {"final_report": report, "references": [r for r in refs if r["n"] in cited],
-                "citation_stats": stats, "usage_summary": usage_summary}
+        out: dict[str, Any] = {"final_report": report, "references": [r for r in refs if r["n"] in cited],
+                               "citation_stats": stats, "usage_summary": usage_summary}
+        if refs and not cited:                  # safety net: even the corrective retry produced no markers
+            msg = ("The final report text carries no source citations (the writer dropped them); the sources consulted are "
+                   "listed below the report. Treat the claims as unverified.")
+            out["gap_items"] = [make_item("", COVERAGE, msg)]
+            out["unresolved_gaps"] = [msg]
+        return out
 
 
 # ── module-level helpers ──────────────────────────────────────────────────────
@@ -221,6 +230,7 @@ def _validate_report(
     report: str,
     contradictions: list[str],
     gaps: list[str],
+    expect_citations: bool = False,
 ) -> list[str]:
     """
     Return a list of validation issues. Empty list = report is acceptable.
@@ -230,6 +240,8 @@ def _validate_report(
     2. If contradictions were provided, the Contradictions section is non-trivially
        present (not just the header line).
     3. If gaps were provided, the Knowledge Gaps section is non-trivially present.
+    4. If numbered sources were provided, the report keeps at least one [n] citation marker
+       (a real run produced a report whose Writer replaced every [n] with 【n】 / dropped them).
     """
     issues: list[str] = []
     lower = report.lower()
@@ -237,6 +249,10 @@ def _validate_report(
     for header in _REQUIRED_HEADERS:
         if header not in lower:
             issues.append(f"Missing required section: '{header}'")
+
+    if expect_citations and not re.search(r"\[\d+\]", report):
+        issues.append("No [n] citation markers found although numbered sources were provided: keep the "
+                      "ASCII [n] markers (for example [1] or [2][4]) on every claim, exactly as in the draft")
 
     # Section 5.9: disclosures must be non-empty when data exists
     if contradictions:

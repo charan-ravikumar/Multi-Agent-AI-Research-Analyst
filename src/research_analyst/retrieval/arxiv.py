@@ -8,6 +8,7 @@ caller gates them by relevance so off-topic queries (e.g. remote work) don't pul
 from __future__ import annotations
 
 import asyncio
+import io
 import re
 import time
 import defusedxml.ElementTree as ET  # arXiv responses are untrusted input
@@ -29,6 +30,7 @@ _last_call = 0.0
 _CANDIDATES = 10                    # fetched per request, then re-ranked locally (one request either way)
 _CACHE_TTL = 3600.0
 _cache: dict[str, tuple[float, list[SearchResult]]] = {}
+_pdf_cache: dict[str, tuple[float, str | None]] = {}
 _cooldown_until = 0.0          # monotonic time before which arXiv is not called (after a 429)
 _COOLDOWN_SECONDS = 120.0
 
@@ -38,6 +40,78 @@ def _get_lock() -> asyncio.Lock:
     if loop_id not in _locks:
         _locks[loop_id] = asyncio.Lock()
     return _locks[loop_id]
+
+
+def abs_to_pdf_url(url: str) -> str | None:
+    """https://arxiv.org/abs/2401.00001v1 -> https://arxiv.org/pdf/2401.00001v1 (None for anything else)."""
+    m = re.match(r"^https://arxiv\.org/abs/([A-Za-z0-9./_-]+)$", url)
+    return f"https://arxiv.org/pdf/{m.group(1)}" if m else None
+
+
+def _extract_pdf_text(data: bytes, max_pages: int) -> str | None:
+    """Text of the first ``max_pages`` pages.  Never raises: a malformed PDF is just 'no full text'."""
+    try:
+        from pypdf import PdfReader  # noqa: PLC0415 — only needed when full text is requested
+        reader = PdfReader(io.BytesIO(data))
+        parts = []
+        for page in reader.pages[:max_pages]:
+            parts.append(page.extract_text() or "")
+        text = "\n\n".join(parts)
+        text = re.sub(r"-\n(?=[a-z])", "", text)                 # re-join words hyphenated across lines
+        text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)             # a PDF breaks every printed line: re-flow paragraphs
+        text = re.sub(r"[ \t]+", " ", text)
+        return text.strip()[:120_000] or None
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(f"pdf text extraction failed: {type(exc).__name__}: {exc}", step="arxiv_pdf_failed")
+        return None
+
+
+async def fetch_pdf_text(abs_url: str, *, client: httpx.AsyncClient | None = None) -> str | None:
+    """Download an arXiv paper's PDF and return its text, or None on any failure.
+
+    Guards: URL must be an arxiv.org/abs/... link (so the host is fixed, no SSRF surface); redirects are
+    allowed only within arxiv.org; the body is streamed with a hard byte cap; only the first pages are
+    parsed; requests share the API's >= 3s spacing and the 429 cooldown."""
+    global _last_call, _cooldown_until
+    pdf_url = abs_to_pdf_url(abs_url)
+    if not pdf_url or time.monotonic() < _cooldown_until:
+        return None
+    hit = _pdf_cache.get(pdf_url)
+    if hit and time.monotonic() - hit[0] < _CACHE_TTL:
+        return hit[1]
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=max(settings.fetch_timeout_seconds, 15.0), follow_redirects=True,
+                                         max_redirects=3, headers={"User-Agent": "ResearchAnalystBot/0.1"})
+    try:
+        async with _get_lock():
+            wait = settings.arxiv_min_interval_seconds - (time.monotonic() - _last_call)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            _last_call = time.monotonic()
+            async with client.stream("GET", pdf_url) as resp:
+                if resp.status_code == 429:
+                    _cooldown_until = time.monotonic() + _COOLDOWN_SECONDS
+                    return None
+                host = resp.url.host or ""
+                if resp.status_code != 200 or not (host == "arxiv.org" or host.endswith(".arxiv.org")):
+                    return None
+                if "pdf" not in resp.headers.get("content-type", "").lower():
+                    return None
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf += chunk
+                    if len(buf) > settings.arxiv_pdf_max_bytes:
+                        _log.warning("arxiv pdf exceeds size cap; skipped", step="arxiv_pdf_too_big")
+                        return None
+        text = await asyncio.to_thread(_extract_pdf_text, bytes(buf), settings.arxiv_pdf_max_pages)
+        _pdf_cache[pdf_url] = (time.monotonic(), text)
+        return text
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(f"arxiv pdf fetch failed: {type(exc).__name__}: {exc}", step="arxiv_pdf_failed")
+        return None
+    finally:
+        if own:
+            await client.aclose()
 
 
 def build_search_query(text: str, max_terms: int = 5) -> str:
