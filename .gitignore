@@ -32,3 +32,8 @@ logs/
 
 # Scraped third-party page text: re-fetched on first run, cached locally, never committed.
 src/research_analyst/evaluation/fixtures/page_*.json
+
+# Coverage data
+.coverage
+.coverage.*
+htmlcov/
