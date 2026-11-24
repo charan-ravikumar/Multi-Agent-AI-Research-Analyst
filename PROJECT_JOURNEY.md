@@ -37,7 +37,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
 | Gemini-only + native tools + structured outputs | `llm/`, `agents/react_search.py`, `llm/schemas.py` | merged to `main` 2026-11-24 on your confirmation; Writer on 3.8 Flash not verified live |
-| Monitor tab + streaming + redesign | `observability/runs.py`, `ui/monitor.py`, `ui/theme.py` | branch `feature/monitoring-streaming-ui`, awaiting confirmation |
+| Monitor tab + streaming + redesign | `observability/runs.py`, `ui/monitor.py`, `ui/theme.py` | merged to `main` 2026-11-24 on your confirmation; streaming not yet tested live |
 | Prompt versioning | `observability/prompt_store.py` (Langfuse) | merged to `main` 2026-11-24 on your confirmation; **not yet run against real Langfuse** |
 
 ## 3. Timeline
@@ -194,7 +194,7 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** Native tool calling vs prompting for JSON: what does the API guarantee and what must you still validate? What is `mode=ANY` and why use it? What are thought signatures and what breaks if you drop them? How do you design for hard free-tier limits (RPM/TPM/RPD) — wait, fail fast, or degrade? Why no fallback provider, and what are the risks? What do you lose when generator and judge share a model family? Structured output (constrained decoding) vs parse-and-retry: trade-offs?
 
-### 2026-11-24 — Feature branch `feature/monitoring-streaming-ui`: Monitor tab, streaming answer, redesign **(on branch, awaiting your confirmation)**
+### 2026-11-24 — Feature branch `feature/monitoring-streaming-ui`: Monitor tab, streaming answer, redesign **(merged to main on your confirmation)**
 
 **Context [DECIDED — your requests]:** (1) a small monitoring page in the app; (2) stream the answer on screen ("does it stream? if not add it" — it did **not** stream before: the Writer returned the whole text at once); (3) make the page look distinctive, not like a generic AI-generated page. Before this, you asked what a production-grade project would track; I listed the metric families (traceability, reliability, latency, cost, quality, agent behaviour, safety, eval drift) and you chose "a small monitoring page in the app" (no Prometheus/Grafana yet).
 
