@@ -35,11 +35,13 @@ def phase_done() -> None:
 
     if final_report:
         payload = verify_payload(final_report, state.get("search_results", []), state.get("extracted_facts", []),
-                                 state.get("references", []))
-        C.render_verify(payload["claims"], payload["evidence"], key="live")
+                                 state.get("references", []), state.get("claim_verdicts"))
+        C.render_verify(payload["claims"], payload["evidence"], key="live", verdicts=payload["verdicts"])
 
     snap = progress.snapshot(st.session_state.get("session_id", ""))
     C.render_run_summary(state.get("usage_summary") or {}, snap["elapsed_s"] if snap else None)
+
+    C.render_react_traces(state.get("react_traces") or [])
 
     # Gaps and contradictions — the backend explicitly surfaces these;
     # the UI must not hide them.

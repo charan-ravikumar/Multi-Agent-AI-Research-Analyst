@@ -41,5 +41,5 @@ Langfuse tracing · pytest/mypy/ruff in CI. Source: github.com/charan-ravikumar/
 - A run takes **about 3–6 minutes** (free-tier model limits).
 - Answers are only as good as what the search finds. No paywalled or login-only pages, no PDFs
   (arXiv gives abstracts only).
-- The "grounding check" is lexical — it flags weakly supported sentences, it does not prove claims true.
+- The citation counts are mechanical (markers present); the per-claim verdicts come from an LLM judge that reads only the gathered passages. Both are triage signals, not proof of truth.
 """

@@ -53,6 +53,9 @@ class ResearchState(TypedDict):
     # to note coverage gaps in the draft rather than silently skipping them.
     failed_sub_questions: Annotated[list[str], operator.add]
 
+    # ReAct search traces (one dict per sub-question: steps of thought/action/observation); empty in fixed mode.
+    react_traces: Annotated[list[dict], operator.add]
+
     # ── reader output ─────────────────────────────────────────────────────────
     extracted_facts: Annotated[list[Fact], operator.add]
 
@@ -108,6 +111,7 @@ class ResearchState(TypedDict):
     revised_draft: NotRequired[list[str]]
 
     # ── writer output: verified references + grounding stats ─────────────────
+    claim_verdicts: NotRequired[dict]          # LLM-judge verdicts per claim: {"verdicts": {id: {...}}, "judge": {...}}
     references: NotRequired[list[dict]]        # [{n, url, title}] actually cited
     citation_stats: NotRequired[dict]          # cited_ratio, weakly_supported, ...
     usage_summary: NotRequired[dict]           # tokens/calls by agent+model, optional cost, budget

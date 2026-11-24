@@ -132,6 +132,19 @@ class Settings(BaseSettings):
     arxiv_fulltext_top_n: int = 2
     arxiv_pdf_max_bytes: int = 8_000_000
     arxiv_pdf_max_pages: int = 15
+    # ── Search strategy ────────────────────────────────────────────────────────
+    # "fixed": the same recipe for every sub-question (two phrasings + arXiv).
+    # "react": a Reason+Act loop (agents/react_search.py) chooses searches / page reads from what it has seen,
+    #          then the SAME ranking + fetching stage runs.  Costs ~1 small LLM call per step.
+    search_mode: str = "fixed"
+    react_max_steps: int = 4
+    # ── Grounding judge (LLM) ──────────────────────────────────────────────────
+    # After the report is written, an LLM checks each cited claim against the passages of the sources it cites
+    # (supported / partial / unsupported).  Replaces the lexical label in the verify panel; the lexical score
+    # is kept only to pick WHICH passage to show.  Falls back to lexical, disclosed, if the judge cannot run.
+    grounding_judge: bool = True
+    grounding_judge_max_claims: int = 24
+    grounding_judge_batch_size: int = 6
     # ── Research planner ──────────────────────────────────────────────────────
     # Number of sub-questions the Planner must produce.  Each sub-question costs
     # ~reader results + 1 synthesis call, so on the Groq free tier (6,000 TPM on

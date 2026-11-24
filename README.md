@@ -23,10 +23,10 @@ review loop) — not an autonomous agent swarm. Read [Limitations](#limitations)
 | Stage | What happens |
 |---|---|
 | Plan | An LLM splits the question into 4–5 sub-questions; you review and edit them |
-| Search | Per sub-question, in parallel: two phrasings (verbatim + a rewritten keyword query), DuckDuckGo plus relevant **arXiv** papers, rank fusion, a source-quality prior and a per-domain preference, then page text for the top results (SSRF-guarded fetch, best passages by BM25) and **PDF full text** for the top arXiv papers |
+| Search | Optional **ReAct mode** (`SEARCH_MODE=react`): the model chooses searches / page reads step by step (max `REACT_MAX_STEPS`) from what it has seen, then the same ranking runs. Default **fixed mode**, per sub-question, in parallel: two phrasings (verbatim + a rewritten keyword query), DuckDuckGo plus relevant **arXiv** papers, rank fusion, a source-quality prior and a per-domain preference, then page text for the top results (SSRF-guarded fetch, best passages by BM25) and **PDF full text** for the top arXiv papers |
 | Read | Facts are extracted in batches of 3 sources and reading **stops early** when enough distinct facts exist or a further batch adds nothing new |
 | Write | Sections cite facts inline; the Writer is told to use only the draft's facts. Citations are numbered **in code**, invented markers are removed, and `[n]` brackets are normalised (a real run once lost every citation to `【1】`) |
-| Check | Automated, lexical grounding stats; **click any claim to see its source passage with shared terms highlighted** |
+| Check | An **LLM judge** (a different model family) rates every cited claim supported / partial / unsupported against the passages it cites; **click any claim to see the verdict, the reason and the source passage**. Citation-marker counts are mechanical; word overlap is only the fallback if the judge is unavailable |
 | Review (opt-in) | Critic ⇄ Reviser loop, off by default (see [Evaluation](#evaluation)) |
 
 Around the pipeline: progress bar with live activity, **Stop** button, token/cost/time per run, coverage warnings
@@ -104,8 +104,9 @@ first run).
 
 - **Evidence is bounded by DuckDuckGo/arXiv and what `trafilatura`/`pypdf` can extract.** No paywalled or
   JS-rendered pages. Source quality is a hand-written domain/recency prior, not a trained model.
-- **Grounding checks are lexical.** "Strong support" means the source uses the claim's words, not that the claim is
-  true. Facts are LLM-extracted. Search results vary between runs, so the same question can yield different
+- **The grounding judge is an LLM reading the gathered passages, not the live web.** A "supported" verdict means the
+  passages back the claim, not that the claim is true; the judge can be wrong and has **not yet been validated
+  against human labels** (nor were the ReAct mode's effect on quality or cost measured). Facts are LLM-extracted. Search results vary between runs, so the same question can yield different
   conclusions.
 - **Free-tier limits bite:** Groq is 8,000 tokens/minute per model; Gemini's free tier allowed only 20 requests/day
   for `gemini-2.5-flash`, so it is a last-resort fallback only. arXiv rate-limits by IP (the client backs off).

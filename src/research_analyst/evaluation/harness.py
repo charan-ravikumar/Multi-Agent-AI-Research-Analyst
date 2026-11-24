@@ -43,10 +43,15 @@ FIXTURES = ROOT / "fixtures"
 RESULTS = ROOT / "results"
 CACHE = ROOT / ".llm_cache"          # gitignored: prompts+outputs, local only
 
+# grounding_judge is off in every config: the evaluation has its own (independent-model) judge, and the in-pipeline
+# one would add tokens and change the numbers relative to earlier results.
 CONFIGS: dict[str, dict[str, Any]] = {
-    "no_debate": {"debate_max_rounds": 0},
-    "debate": {"debate_max_rounds": 2},
-    "no_debate_snippets": {"debate_max_rounds": 0, "fetch_pages": False},
+    "no_debate": {"debate_max_rounds": 0, "grounding_judge": False},
+    "debate": {"debate_max_rounds": 2, "grounding_judge": False},
+    "no_debate_snippets": {"debate_max_rounds": 0, "fetch_pages": False, "grounding_judge": False},
+    # A/B for the ReAct searcher vs "no_debate": same everything, only how candidates are found differs.
+    # Its searches are recorded on first use then replayed, so react runs are repeatable.
+    "react": {"debate_max_rounds": 0, "search_mode": "react", "grounding_judge": False},
 }
 
 

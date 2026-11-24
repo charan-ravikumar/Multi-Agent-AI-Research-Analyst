@@ -45,7 +45,7 @@ def entry_from_state(state: dict, question: str, seconds: float, models: dict[st
     """Build a gallery entry from a finished run's state."""
     curated = curate_gaps(state.get("gap_items") or [])
     verify = verify_payload(state["final_report"], state.get("search_results", []), state.get("extracted_facts", []),
-                            state.get("references", []))
+                            state.get("references", []), state.get("claim_verdicts"))
     for ev in verify["evidence"].values():
         ev["text"] = ev["text"][:_EVIDENCE_CHARS]
     usage = state.get("usage_summary") or {}
@@ -92,7 +92,7 @@ def render_gallery(directory: Path | None = None) -> None:
                           "truncated_calls": (e.get("usage") or {}).get("truncated_calls")},
                          e.get("seconds"), key="gallery")
     v = e.get("verify") or {}
-    C.render_verify(v.get("claims", []), v.get("evidence", {}), key=f"gallery_{e['id']}")
+    C.render_verify(v.get("claims", []), v.get("evidence", {}), key=f"gallery_{e['id']}", verdicts=v.get("verdicts"))
     if e.get("coverage"):
         st.subheader("⚠ Coverage warnings")
         for c in e["coverage"]:

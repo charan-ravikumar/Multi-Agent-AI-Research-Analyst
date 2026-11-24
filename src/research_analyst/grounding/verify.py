@@ -5,9 +5,9 @@ Given the final report and the evidence the pipeline gathered, produce for every
 passage(s) of each cited source that best match it, with the shared terms highlighted.
 
 What this is — and is not: it shows the reader WHERE a claim came from so they can check it in seconds.
-The support label (strong / partial / weak) is lexical term overlap, the same kind of check as the
-pipeline's grounding stats; a "strong" label means the passage uses the claim's words, not that the
-claim is true.
+The LEXICAL support label (strong / partial / weak) is term overlap — it is only the fallback now.  The primary
+verdict comes from an LLM judge (grounding/judge.py) that reads the claim and the cited passages and decides
+supported / partial / unsupported.  BM25 here only chooses WHICH passage to show and send to the judge.
 
 Security: passages come from web pages.  Every text segment is HTML-escaped; the only markup this module
 ever emits is its own ``<mark>`` tags (see ``highlight``).
@@ -97,6 +97,21 @@ def _label(score: float) -> str:
     return "strong" if score >= STRONG else "partial" if score >= PARTIAL else "weak"
 
 
+def best_support(claim_text: str, ev: dict) -> tuple[str, str]:
+    """The passage and the extracted fact of one cited source that best match the claim (BM25).  Retrieval, not judgement."""
+    passages = split_passages(ev.get("text", ""), target=120, max_len=520) or ([ev["text"]] if ev.get("text") else [])
+    best_passage = ""
+    if passages:
+        ranked = bm25_rank(claim_text, passages)
+        best_passage = passages[ranked[0][0]] if ranked else passages[0]
+    facts = ev.get("facts", [])
+    best_fact = ""
+    if facts:
+        ranked = bm25_rank(claim_text, facts)
+        best_fact = facts[ranked[0][0]] if ranked else facts[0]
+    return best_passage, best_fact
+
+
 def support_for(claim: Claim, evidence: dict[str, dict]) -> list[dict]:
     """For each source cited by ``claim``: the best passage + best extracted fact, a lexical support label."""
     claim_tokens = set(tokenize(claim.text))
@@ -107,16 +122,7 @@ def support_for(claim: Claim, evidence: dict[str, dict]) -> list[dict]:
             out.append({"ref": n, "title": "(source not found)", "url": "", "label": "weak", "score": 0.0,
                         "passage_html": "", "fact_html": ""})
             continue
-        passages = split_passages(ev.get("text", ""), target=120, max_len=520) or ([ev["text"]] if ev.get("text") else [])
-        best_passage = ""
-        if passages:
-            ranked = bm25_rank(claim.text, passages)
-            best_passage = passages[ranked[0][0]] if ranked else passages[0]
-        facts = ev.get("facts", [])
-        best_fact = ""
-        if facts:
-            ranked = bm25_rank(claim.text, facts)
-            best_fact = facts[ranked[0][0]] if ranked else facts[0]
+        best_passage, best_fact = best_support(claim.text, ev)
         support_tokens = set(tokenize(best_passage)) | set(tokenize(best_fact))
         shared = claim_tokens & support_tokens
         score = round(len(shared) / len(claim_tokens), 3) if claim_tokens else 0.0
@@ -129,7 +135,13 @@ def support_for(claim: Claim, evidence: dict[str, dict]) -> list[dict]:
     return out
 
 
-def verify_payload(report: str, search_results: list[Any], facts: list[Any], references: list[dict]) -> dict:
-    """Everything the verify panel needs, JSON-serialisable (used by the live results page and the gallery)."""
+def verify_payload(report: str, search_results: list[Any], facts: list[Any], references: list[dict],
+                   claim_verdicts: dict | None = None) -> dict:
+    """Everything the verify panel needs, JSON-serialisable (used by the live results page and the gallery).
+
+    ``claim_verdicts`` is the LLM judge's output (grounding/judge.py); when absent the panel falls back to the
+    lexical word-overlap label and says so.
+    """
     return {"claims": [{"id": c.id, "text": c.text, "refs": list(c.refs)} for c in extract_claims(report)],
-            "evidence": build_evidence_index(search_results, facts, references)}
+            "evidence": build_evidence_index(search_results, facts, references),
+            "verdicts": claim_verdicts or {}}

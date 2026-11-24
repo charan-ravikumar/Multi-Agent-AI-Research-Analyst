@@ -67,10 +67,10 @@ def render_citation_stats(state: dict) -> None:
     if not s:
         return
     if s.get("report_claim_sentences"):                    # measured on the FINAL report text
-        head = (f"Grounding check (automated, lexical — not a proof of correctness): "
+        head = (f"Citation check (automated — counts markers, not truth): "
                 f"{s.get('report_cited', 0)}/{s['report_claim_sentences']} sentences of the report cite a source")
     elif s.get("claim_sentences"):
-        head = (f"Grounding check (automated, lexical — not a proof of correctness): "
+        head = (f"Citation check (automated — counts markers, not truth): "
                 f"{s.get('cited', 0)}/{s['claim_sentences']} draft claim sentences cite a source")
     else:
         return
@@ -107,15 +107,45 @@ def _select_claim(sel_key: str, claim_id: int) -> None:
     st.session_state[sel_key] = claim_id
 
 
-def render_verify(claims: list[dict], evidence: dict, key: str = "live") -> None:
-    """Click a claim sentence -> see the exact source passage(s) it rests on, shared terms highlighted."""
+_VERDICT_ICON = {"supported": "🟢", "partial": "🟡", "unsupported": "🔴"}
+
+
+def render_judge_summary(verdicts: dict | None) -> None:
+    """One-line result of the LLM grounding judge (or why it is absent)."""
+    if not verdicts:
+        return
+    j, s = verdicts.get("judge") or {}, verdicts.get("summary") or {}
+    if s.get("judged"):
+        st.caption(f"LLM grounding judge ({j.get('model', '?')}): of {s['judged']} cited claims checked against their sources, "
+                   f"{s['supported']} supported, {s['partial']} partial, {s['unsupported']} unsupported."
+                   + (f" ({j['error']})" if j.get("error") else "")
+                   + " The judge reads only the gathered passages and is itself a model: a triage signal, not proof.")
+    elif j.get("status") in ("failed", "partial"):
+        st.caption(f"LLM grounding judge unavailable ({j.get('error') or j.get('status')}); showing word-overlap labels instead.")
+
+
+def render_react_traces(traces: list[dict]) -> None:
+    """What the ReAct search agent thought and did, per sub-question (only present when SEARCH_MODE=react)."""
+    if not traces:
+        return
+    with st.expander(f"Search agent reasoning (ReAct) — {len(traces)} sub-question(s)", expanded=False):
+        for t in traces:
+            st.markdown(f"**{t['sub_question']}** — stopped: `{t['stopped']}`")
+            for step in t["steps"]:
+                st.markdown(f"{step['step']}. *{step['thought'] or '…'}*  \n`{step['action']}({step['input']})`")
+
+
+def render_verify(claims: list[dict], evidence: dict, key: str = "live", verdicts: dict | None = None) -> None:
+    """Click a claim sentence -> the LLM judge's verdict plus the exact source passage(s) it rests on."""
     from research_analyst.grounding.verify import Claim, support_for  # noqa: PLC0415
     if not claims:
         return
     st.subheader("🔍 Verify the claims")
-    st.caption("Click a sentence from the report to see the passage in the cited source(s) it rests on. "
-               "Highlighted words are shared between the claim and the source. The label measures word overlap, "
-               "not truth — open the source to be sure.")
+    st.caption("Click a sentence from the report to see the passage in the cited source(s) it rests on and whether an "
+               "LLM judge found the claim supported by them. Highlighted words are shared between claim and source. "
+               "Open the source to be sure.")
+    render_judge_summary(verdicts)
+    by_id = (verdicts or {}).get("verdicts") or {}
     sel_key = f"verify_sel_{key}"
     selected = st.session_state.get(sel_key, claims[0]["id"])
     left, right = st.columns([5, 6])
@@ -129,10 +159,19 @@ def render_verify(claims: list[dict], evidence: dict, key: str = "live") -> None
         claim = next((c for c in claims if c["id"] == selected), claims[0])
         st.markdown(f"**Claim {claim['id']}:** {claim['text']}")
         icons = {"strong": "🟢", "partial": "🟡", "weak": "🔴"}
+        verdict = by_id.get(str(claim["id"]))
+        if verdict:
+            note = f" — {verdict['reason']}" if verdict.get("reason") else ""
+            st.markdown(f"{_VERDICT_ICON[verdict['verdict']]} **Judge: {verdict['verdict']}**{note}")
+        else:
+            st.caption("No LLM verdict for this claim; the label below is word overlap only.")
         for s in support_for(Claim(claim["id"], claim["text"], tuple(claim["refs"])), evidence):
             with st.container(border=True):
                 title = f"[{s['ref']}] [{s['title']}]({s['url']})" if s["url"] else f"[{s['ref']}] {s['title']}"
-                st.markdown(f"**{title}**  \n{icons[s['label']]} word-overlap support: **{s['label']}** ({int(s['score'] * 100)}% of the claim's key terms)")
+                backs = verdict and s["ref"] in (verdict.get("supporting_refs") or [])
+                overlap = f"word overlap: {s['label']} ({int(s['score'] * 100)}% of key terms)"
+                st.markdown(f"**{title}**  \n" + (f"✅ judge: this source backs the claim · {overlap}" if backs
+                                                 else f"{icons[s['label']]} {overlap}"))
                 if s["passage_html"]:
                     st.markdown(f"<div style='font-size:0.92rem;line-height:1.5'>{s['passage_html']}</div>", unsafe_allow_html=True)
                 else:

@@ -3,7 +3,7 @@ pipeline/graph.py — assembles the LangGraph StateGraph.
 
     START -> planner -> plan_approval (human, interrupt)
           -> [fan_out: one Send per sub-question] -> process_sub_question (parallel, failure-isolated)
-          -> supervisor -> debate (optional review loop) -> writer -> memory_store -> END
+          -> supervisor -> debate (optional review loop) -> writer -> grounding_judge -> memory_store -> END
 
 Node implementations live in pipeline/nodes/; agent instances in pipeline/registry.py.
 Every caller must pass config={"configurable": {"thread_id": ...}} (the checkpointer is required for
@@ -20,6 +20,7 @@ from research_analyst.models import ResearchState
 from research_analyst.pipeline import registry
 from research_analyst.pipeline.nodes.branch import fan_out, process_sub_question
 from research_analyst.pipeline.nodes.debate import debate_loop_node
+from research_analyst.pipeline.nodes.grounding import grounding_judge_node
 from research_analyst.pipeline.nodes.memory import memory_node
 from research_analyst.pipeline.nodes.plan import plan_approval_node
 from research_analyst.pipeline.nodes.supervisor import supervisor_node
@@ -46,6 +47,7 @@ def build_graph(checkpointer: Any = None) -> Any:   # returns a CompiledStateGra
     graph.add_node("supervisor",           supervisor_node)
     graph.add_node("debate",               debate_loop_node)
     graph.add_node("writer",               registry.writer)  # type: ignore[type-var]
+    graph.add_node("grounding_judge",      grounding_judge_node)
     graph.add_node("memory_store",          memory_node)
 
     # edges
@@ -55,7 +57,8 @@ def build_graph(checkpointer: Any = None) -> Any:   # returns a CompiledStateGra
     graph.add_edge("process_sub_question", "supervisor")     # fan-in
     graph.add_edge("supervisor", "debate")                   # -> debate loop
     graph.add_edge("debate", "writer")                       # -> writer
-    graph.add_edge("writer", "memory_store")         # -> persist report
+    graph.add_edge("writer", "grounding_judge")      # -> LLM check of every cited claim (failure-isolated)
+    graph.add_edge("grounding_judge", "memory_store")  # -> persist report
     graph.add_edge("memory_store", END)
 
     return graph.compile(checkpointer=checkpointer)

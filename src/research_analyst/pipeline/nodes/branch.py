@@ -110,6 +110,7 @@ async def process_sub_question_inner(state: dict, br: Any = None) -> dict:
 
     all_new_results = list(new_results)
     all_new_failed  = list(new_failed)
+    react_traces    = list(search_out.get("react_traces", []))
 
     # ── 2. Zero-results retry (once) ─────────────────────────────────────────
     if sq in new_failed:
@@ -119,6 +120,7 @@ async def process_sub_question_inner(state: dict, br: Any = None) -> dict:
         retry_out    = await searcher(state)
         retry_results = retry_out.get("search_results", [])
         all_new_results += retry_results
+        react_traces += retry_out.get("react_traces", [])
         if retry_results:
             all_new_failed = [f for f in all_new_failed if f != sq]
             routing_entries.append(
@@ -175,6 +177,7 @@ async def process_sub_question_inner(state: dict, br: Any = None) -> dict:
     )
     result: dict = {
         "search_results":       all_new_results,
+        "react_traces":         react_traces,
         "failed_sub_questions": all_new_failed,
         "extracted_facts":      new_facts,
         "citations":            synth_out.get("citations", []),

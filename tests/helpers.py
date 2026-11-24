@@ -17,6 +17,8 @@ _ROLES = [
     ("research revision assistant", "revise"),
     ("research writer", "writer"),
     ("You write web search queries", "rewriter"),
+    ("research search agent", "react"),
+    ("strict fact-checking judge", "judge"),
 ]
 
 _WRITER_OK = (
@@ -58,6 +60,8 @@ class FakeLLM:
             "revise": json.dumps({"revised_sections": ["revised section"]}),
             "writer": _WRITER_OK,
             "rewriter": json.dumps({"queries": ["rewritten keyword query about the topic"]}),
+            "react": json.dumps({"thought": "enough", "action": "finish", "input": ""}),
+            "judge": json.dumps({"verdicts": []}),
         }.get(role, "{}")
 
     def __call__(self, prompt, *, tier=None, system=None, temperature=None, max_tokens=None,
@@ -92,7 +96,7 @@ def make_search(n_results: int = 3, snippet: str = "A snippet.", calls: list | N
 def initial_state(auto_approve: bool = True, query: str = "What is X?") -> ResearchState:
     return ResearchState(
         session_id=str(uuid.uuid4()), query=query, research_plan=None, sub_questions=[],
-        search_results=[], failed_sub_questions=[], extracted_facts=[], citations=[],
+        search_results=[], react_traces=[], failed_sub_questions=[], extracted_facts=[], citations=[],
         contradictions=[], unresolved_gaps=[], gap_items=[], draft=[], final_report="", iteration=0,
         routing_history=[], auto_approve_plan=auto_approve,
     )

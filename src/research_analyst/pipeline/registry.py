@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from research_analyst.agents.critic import CriticAgent
+from research_analyst.agents.grounding_judge import GroundingJudgeAgent
 from research_analyst.agents.planner import PlannerAgent
 from research_analyst.agents.reader import ReaderAgent
 from research_analyst.agents.searcher import SearcherAgent
@@ -14,3 +15,4 @@ reader = ReaderAgent()
 synthesizer = SynthesizerAgent()
 critic = CriticAgent()
 writer = WriterAgent()
+grounding_judge = GroundingJudgeAgent()

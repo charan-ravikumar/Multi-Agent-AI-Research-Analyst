@@ -44,6 +44,8 @@ async def main() -> int:
     import research_analyst.agents.searcher as S
     llm.generate = cached
     S.search_web, S.fetch_many, S.search_arxiv = store.search, store.fetch, store.arxiv
+    import research_analyst.agents.react_search as RS          # the ReAct loop calls the tools directly: same fixtures
+    RS.search_web, RS.fetch_many, RS.search_arxiv = store.search, store.fetch, store.arxiv
 
     rows, errors = [], []
     for q in queries:

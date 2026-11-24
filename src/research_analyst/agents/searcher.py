@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.agents.react_search import ReactSearch, url_key as _url_key
 from research_analyst.config import settings
 from research_analyst.observability.usage import BudgetExceeded
 from research_analyst.llm import ModelTier
@@ -43,7 +44,7 @@ class SearcherAgent(BaseAgent):
     name = "searcher"
     tier = ModelTier.FAST        # only used for the optional query-rewrite call
     json_mode = True
-    max_tokens = 150
+    max_tokens = 300             # query rewrite needs ~100; a ReAct step (thought + action) a bit more
 
     async def run(self, state: StateLike) -> dict[str, Any]:
         sub_question = state.get("current_sub_question", "").strip()
@@ -64,22 +65,21 @@ class SearcherAgent(BaseAgent):
             iteration=iteration,
         )
 
-        queries = await self._queries(sub_question, topic, state)
-        per_query = await asyncio.gather(*(
-            search_web(q, sub_question=sub_question, max_results=settings.search_max_results) for q in queries
-        ))
-        extra = await self._arxiv(sub_question, topic)
-
         pool: dict[str, SearchResult] = {}
         rankings: list[list[str]] = []
-        for res in [*per_query, extra]:
-            urls = []
-            for r in res:
-                key = _url_key(r.url)
-                pool.setdefault(key, r)
-                urls.append(key)
-            if urls:
-                rankings.append(urls)
+        prefetched: dict[str, str] = {}
+        traces: list[dict] = []
+        n_queries = 0
+        if settings.search_mode == "react":
+            outcome = await ReactSearch(self).run(sub_question, topic, state)
+            pool, rankings, prefetched = outcome.pool, outcome.rankings, outcome.pages
+            traces = [{"sub_question": sub_question, "stopped": outcome.stopped, "steps": outcome.trace}]
+            n_queries = len(outcome.trace)
+            if not pool:                                    # the loop found nothing (or broke): use the fixed recipe
+                self.log.warning("react search produced no candidates; falling back to the fixed recipe",
+                                 step="react_fallback", session_id=session_id, iteration=iteration)
+        if not pool:
+            pool, rankings, n_queries = await self._gather_fixed(sub_question, topic, state)
 
         fused = rrf_fuse(rankings)
         candidates = [r.model_copy(update={"url": r.url}) for r in pool.values()]
@@ -91,7 +91,7 @@ class SearcherAgent(BaseAgent):
         )
 
         if results and settings.fetch_pages:
-            results = await self._enrich_with_pages(results, sub_question, session_id, iteration)
+            results = await self._enrich_with_pages(results, sub_question, session_id, iteration, prefetched)
         if results and settings.arxiv_fulltext:
             results = await self._enrich_with_arxiv_fulltext(results, sub_question, session_id, iteration)
 
@@ -102,18 +102,38 @@ class SearcherAgent(BaseAgent):
                 session_id=session_id,
                 iteration=iteration,
             )
-            return {"search_results": [], "failed_sub_questions": [sub_question]}
+            return {"search_results": [], "failed_sub_questions": [sub_question], "react_traces": traces}
 
         self.log.info(
             f"found {len(results)} result(s) for sub-question: {sub_question!r} "
-            f"({len(queries)} query/ies, {sum(1 for r in results if r.source_type == 'arxiv')} arXiv)",
+            f"({n_queries} query/ies, {sum(1 for r in results if r.source_type == 'arxiv')} arXiv)",
             step="search_done",
             session_id=session_id,
             iteration=iteration,
         )
-        return {"search_results": results, "failed_sub_questions": []}
+        return {"search_results": results, "failed_sub_questions": [], "react_traces": traces}
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    async def _gather_fixed(self, sub_question: str, topic: str, state: StateLike
+                            ) -> tuple[dict[str, SearchResult], list[list[str]], int]:
+        """The fixed recipe: verbatim + rewritten query on the web, plus arXiv.  Returns (pool, rankings, n_queries)."""
+        queries = await self._queries(sub_question, topic, state)
+        per_query = await asyncio.gather(*(
+            search_web(q, sub_question=sub_question, max_results=settings.search_max_results) for q in queries
+        ))
+        extra = await self._arxiv(sub_question, topic)
+        pool: dict[str, SearchResult] = {}
+        rankings: list[list[str]] = []
+        for res in [*per_query, extra]:
+            urls = []
+            for r in res:
+                key = _url_key(r.url)
+                pool.setdefault(key, r)
+                urls.append(key)
+            if urls:
+                rankings.append(urls)
+        return pool, rankings, len(queries)
 
     async def _queries(self, sub_question: str, topic: str, state: StateLike) -> list[str]:
         queries = [sub_question]
@@ -179,10 +199,12 @@ class SearcherAgent(BaseAgent):
         return out
 
     async def _enrich_with_pages(
-        self, results: list[SearchResult], sub_question: str, session_id: str, iteration: int
+        self, results: list[SearchResult], sub_question: str, session_id: str, iteration: int,
+        prefetched: dict[str, str] | None = None,
     ) -> list[SearchResult]:
         top = [r for r in results[: settings.fetch_top_n] if r.source_type == "web"]
-        pages = await fetch_many(r.url for r in top)
+        have = prefetched or {}                                   # pages the ReAct loop already read
+        pages = {**have, **await fetch_many(r.url for r in top if r.url not in have)}
         enriched = []
         n_ok = 0
         for r in results:
@@ -206,5 +228,3 @@ class SearcherAgent(BaseAgent):
         return enriched
 
 
-def _url_key(url: str) -> str:
-    return url.split("#")[0].rstrip("/").lower()
