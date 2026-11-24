@@ -1,0 +1,706 @@
+{
+ "id": "what-are-the-main-applications-and-risks-of-large-language-m",
+ "question": "What are the main applications and risks of large language models in healthcare?",
+ "generated_at": "2026-11-24",
+ "models": {
+  "fast": "openai/gpt-oss-20b",
+  "strong": "openai/gpt-oss-120b"
+ },
+ "review_loop": false,
+ "seconds": 155.2,
+ "usage": {
+  "total_tokens": 24312,
+  "calls": 22,
+  "estimated_cost_usd": null,
+  "by_agent": {
+   "planner": {
+    "calls": 1,
+    "prompt_tokens": 309,
+    "completion_tokens": 189,
+    "total_tokens": 498
+   },
+   "searcher": {
+    "calls": 5,
+    "prompt_tokens": 1295,
+    "completion_tokens": 145,
+    "total_tokens": 1440
+   },
+   "reader": {
+    "calls": 10,
+    "prompt_tokens": 9439,
+    "completion_tokens": 2101,
+    "total_tokens": 11540
+   },
+   "synthesizer": {
+    "calls": 5,
+    "prompt_tokens": 4648,
+    "completion_tokens": 1852,
+    "total_tokens": 6500
+   },
+   "writer": {
+    "calls": 1,
+    "prompt_tokens": 2359,
+    "completion_tokens": 1975,
+    "total_tokens": 4334
+   }
+  },
+  "by_model": {
+   "openai/gpt-oss-120b": {
+    "calls": 7,
+    "prompt_tokens": 7316,
+    "completion_tokens": 4016,
+    "total_tokens": 11332
+   },
+   "openai/gpt-oss-20b": {
+    "calls": 15,
+    "prompt_tokens": 10734,
+    "completion_tokens": 2246,
+    "total_tokens": 12980
+   }
+  },
+  "truncated_calls": 0
+ },
+ "report": "## Executive Summary\nLarge language models (LLMs) are being applied to a range of clinical tasks—including diagnosis, treatment recommendation, data structuring, and real‑time decision support within EHR systems—while also presenting notable risks such as hallucinations, security vulnerabilities, and regulatory/ethical challenges [1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17][18][19][20].  \nMitigating these risks requires layered governance that combines technical safeguards, rigorous data governance, and regulatory oversight, alongside targeted validation and human oversight to ensure safe deployment in healthcare [18][19][20].  \n\n## Key Findings\n- LLMs can assist clinicians in diagnosing diseases by interpreting symptoms and histories, sometimes matching or exceeding physician performance on benchmark tasks [1][2][3].  \n- LLMs generate treatment recommendations aligned with guidelines and patient factors, supporting therapeutic decision‑making [1].  \n- Foundation models convert unstructured medical records into structured formats, facilitating analytics and workflow integration [4].  \n- LLMs are unsuitable for fully autonomous clinical coding due to frequent hallucination of medical codes, limiting reliability in that domain [5].  \n- Embedding LLMs in EHR systems enables real‑time clinical decision support, outcome prediction (e.g., readmission risk, length of stay), and improved data completeness for prognostic models [6][7][8][9][10].  \n- Security risks such as backdoor attacks (e.g., BadCLM) demonstrate that LLMs can be compromised when specific triggers appear in inputs [6].  \n- Rapid adoption in specialties like sports medicine outpaces robust validation, raising concerns about accuracy, safety, and the need for expert oversight [11][12].  \n- Vision‑language models exhibit fabricated anatomy and demographic bias, underscoring the limited reliability of AI outputs for complex medical content [13].  \n- Regulatory frameworks (GDPR, European Health Data Space, HIPAA) impose requirements for explainability, accountability, and data protection on LLM deployments in healthcare [14][15].  \n- Ethical issues include data privacy, consent, liability, and intellectual property contamination, prompting scrutiny of data provenance and usage rights [16][17].  \n- Governance strategies—auditable decision‑making, model cards, citation capabilities, red‑teaming, independent auditing, and frameworks like ASPIRE—aim to detect hallucinations and ensure transparency [18][11].  \n- Formal regulatory oversight and educational integration are recommended to balance risk management with the benefits of LLMs across health applications [19][20].\n\n## Detailed Analysis\nLLMs are being applied across several clinical tasks beyond simple text generation. They are actively used to assist healthcare professionals in diagnosing diseases by interpreting patient symptoms and medical histories, leveraging their ability to perform simulated diagnostic reasoning that can match or exceed physician performance on benchmark tasks [1][2][3]. In addition to diagnosis, LLMs can generate treatment recommendations that align with medical guidelines and consider individual patient factors, supporting clinicians in selecting appropriate therapeutic options [1]. Another emerging application is the structuring of patient clinical data, where foundation models convert unstructured medical records into standardized, structured formats to facilitate downstream analytics and workflow integration [4]. However, LLMs remain unsuitable for fully autonomous clinical coding because they frequently hallucinate medical codes, leading to unreliable outputs that limit their use in this specific domain [5].\n\nLarge language models are being embedded directly into electronic health record (EHR) systems to deliver clinical decision support by extracting and interpreting the rich information contained in clinical notes, thereby enhancing decision‑making processes [6][7]. Integration can take the form of models that read EHR data in real time, as exemplified by NYUTron, which accesses patient records to generate predictions of outcomes such as readmission risk and length of stay across the NYU Langone Health network [8]. These deployments rely on medium‑sized, fine‑tuned models trained on highly refined EHR datasets, enabling rapid implementation of predictive analytics within the healthcare infrastructure [8]. Beyond outcome prediction, LLMs can restructure unstructured EHR content, improving the completeness of data used for survival and mortality forecasts, particularly in specialized contexts like radiotherapy [9]. Effective use of LLMs in EHRs therefore depends on prompting strategies for diverse clinical tasks and fine‑tuning to align the models with domain‑specific language and objectives [10]. However, the integration of LLMs also introduces security considerations, as demonstrated by the BadCLM backdoor attack, which shows that models can be compromised when specific triggers appear in inputs while otherwise performing accurately [6].\n\nLLMs such as ChatGPT, GPT‑3.5, and GPT‑4 are being rapidly incorporated into sports medicine for tasks ranging from training prescription to academic writing, reflecting a broader enthusiasm for their potential to enhance clinical decision‑making and patient care [11][12]. The speed of adoption has outstripped the generation of robust, domain‑specific validation evidence, leaving clinicians without clear data on the models’ clinical utility, accuracy, or safety in this field [11]. Experts therefore recommend that practitioners prioritize validation studies that are specific to the medical domain rather than relying on general benchmark performance, and that any LLM output be used only under expert oversight to mitigate risks to patient safety [11]. Parallel concerns arise from evaluations of related AI systems, such as text‑to‑image models, which consistently produce fabricated anatomy, incorrect labels, and exhibit demographic bias, highlighting the variability and limited reliability of AI outputs for complex medical structures or procedures [13]. While vision‑language models can aid in prompt refinement and annotation, they cannot guarantee scientific accuracy and may even rate flawed AI outputs more favorably than human experts, underscoring the need for careful human verification of AI‑generated content [13].\n\nDeploying LLMs in patient care triggers a complex web of regulatory, ethical, and privacy challenges. In Europe, the General Data Protection Regulation (GDPR) mandates explainability, accountability, and protection of individual rights when AI systems make automated decisions, including profiling in healthcare, thereby imposing strict requirements on LLM transparency and patient safeguards [14]. Complementing GDPR, the European Health Data Space provides a regulatory structure that governs both the delivery of primary care and the secondary use of health data for research and policy, shaping how LLMs can be trained and applied across the health ecosystem [14]. In the United States, the Health Insurance Portability and Accountability Act (HIPAA) serves a similar protective role, ensuring the security and privacy of health information and guarding against fraud and abuse, which extends to any LLM‑driven applications handling protected health information [15]. Ethical concerns are equally prominent: virtual assistants and other LLM‑based tools raise questions about data interpretation, consent, liability, and the broader implications of privacy and security breaches [16]. Specific ethical issues highlighted for LLMs include data privacy and usage rights, provenance of training data, and the risk of intellectual property contamination, reflecting worries that models may embed copyrighted material without proper licensing [17]. Regulators are particularly focused on data provenance, scrutinizing the origins and integrity of the datasets used to train LLMs to ensure compliance with legal and ethical standards [17].\n\nMitigating the risks of LLMs in healthcare requires a multi‑layered governance approach that combines technical, procedural, and regulatory measures. Authors emphasize accountability and governance mechanisms such as auditable decision‑making, thorough documentation of data origins, interactive model cards, and built‑in citation capabilities to ensure traceability and transparency of model outputs [18]. External scrutiny methods—including red‑teaming, independent auditing, and the use of the ASPIRE framework together with Knowledge Management Systems—provide additional oversight and help detect failures such as hallucinations, which are identified as a specific risk in clinical contexts [18][11]. Data governance practices, encompassing data quality controls, privacy safeguards, and clear stewardship policies, further reduce exposure to bias and misuse [11]. Regulatory oversight is advocated as a higher‑level safeguard, with formal regulatory frameworks recommended to balance risk management with the maximization of LLM benefits across health applications [19]. Complementary strategies extend to educational settings, where integrating LLMs into curricula under governance guidelines can enhance learning while preserving academic integrity [19], and to digital health communication, where targeted risk‑communication tactics are employed to counter misinformation and infodemic threats [20]. Together, these strategies form a comprehensive governance ecosystem that aims to ensure safe, reliable, and beneficial deployment of LLMs in healthcare.\n\n## Contradictions and Conflicting Evidence\nNo contradictions were identified across sources.\n\n## Knowledge Gaps and Limitations\n- Open question: How do LLM-driven diagnostic and treatment recommendations perform in real-world clinical settings compared to simulated benchmarks?  \n- Open question: What specific data ingestion, preprocessing, and real‑time streaming pipelines are required to feed EHR data into LLMs for clinical decision support?  \n- Open question: What quantitative measures of diagnostic accuracy do LLMs achieve across different medical specialties?  \n- Open question: How can informed consent be effectively obtained and documented for patients when LLMs process their health data?  \n- Open question: How can the effectiveness of specific governance tools such as model cards or the ASPIRE framework be empirically measured in clinical settings?  \n- Open question: What strategies can mitigate hallucination risks when LLMs are used for clinical coding or other high‑stakes tasks?\n\n## References\n\n[1] 10 Exciting Project Ideas Using Large Language Models (LLMs) — https://www.geeksforgeeks.org/blogs/project-ideas-using-large-language-models/\n[2] State of clinical AI in 2026 | BMJ Digital Health & AI — https://bmjdigitalhealth.bmj.com/content/2/1/e000113\n[3] Large language models enhance diagnostic reasoning of medical... — https://link.springer.com/article/10.1186/s12909-026-09079-w\n[4] SoftTiger: A Clinical Foundation Model for Healthcare Workflows — https://arxiv.org/abs/2403.00868v3\n[5] Profiling Hallucinations in Frontier LLMs for Entity Linking to Medical Ontologies — https://arxiv.org/abs/2611.18595v1\n[6] BadCLM: Backdoor Attack in Clinical Language Models for Electronic Health Records — https://arxiv.org/abs/2407.05213v1\n[7] irAE-GPT: leveraging large language models to identify... — https://researchportal.murdoch.edu.au/esploro/outputs/journalArticle/irAE-GPT-leveraging-large-language-models-to/991005884944507891\n[8] NYU Large Language Model Forecasts Hospital... | TechTarget — https://www.techtarget.com/healthtechanalytics/news/366590290/NYU-Large-Language-Model-Forecasts-Hospital-Readmissions-Length-of-Stay\n[9] Improving mortality prediction after radiotherapy with large language... — https://pubmed.ncbi.nlm.nih.gov/40692078/\n[10] A Comprehensive Survey of Electronic Health Record Modeling: From Deep Learning Approaches to Large Language Models — https://arxiv.org/abs/2507.12774v1\n[11] Frontiers | Generative artificial intelligence and large language models... — https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1843535/full\n[12] A Comprehensive Survey on the Trustworthiness of Large Language — https://aclanthology.org/2025.findings-emnlp.356.pdf\n[13] Frontiers | Artificial intelligence in biomedical visualization and... — https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1956708/full\n[14] A Design Framework for operationalizing Trustworthy Artificial Intelligence in Healthcare: Requirements, Tradeoffs and Challenges for its Clinical Adoption — https://arxiv.org/abs/2504.19179v1\n[15] Implications of Artificial Intelligence on Health Data Privacy and Confidentiality — https://arxiv.org/abs/2501.01639v2\n[16] Ethical and regulatory challenges of AI technologies in ... — https://pmc.ncbi.nlm.nih.gov/articles/PMC10879008/\n[17] Ethical and regulatory challenges of large language models in ... — https://www.thelancet.com/journals/landig/article/PIIS2589-7500(24)00061-X/fulltext\n[18] Navigating LLM Ethics: Advancements, Challenges, and Future Directions — https://arxiv.org/abs/2406.18841v5\n[19] A systematic literature review to implement large language model in... — https://link.springer.com/article/10.1007/s44217-025-00424-7\n[20] Frontiers | Artificial intelligence and infodemic management... — https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2026.1830005/full",
+ "references": [
+  {
+   "n": 1,
+   "url": "https://www.geeksforgeeks.org/blogs/project-ideas-using-large-language-models/",
+   "title": "10 Exciting Project Ideas Using Large Language Models (LLMs)"
+  },
+  {
+   "n": 2,
+   "url": "https://bmjdigitalhealth.bmj.com/content/2/1/e000113",
+   "title": "State of clinical AI in 2026 | BMJ Digital Health & AI"
+  },
+  {
+   "n": 3,
+   "url": "https://link.springer.com/article/10.1186/s12909-026-09079-w",
+   "title": "Large language models enhance diagnostic reasoning of medical..."
+  },
+  {
+   "n": 4,
+   "url": "https://arxiv.org/abs/2403.00868v3",
+   "title": "SoftTiger: A Clinical Foundation Model for Healthcare Workflows"
+  },
+  {
+   "n": 5,
+   "url": "https://arxiv.org/abs/2611.18595v1",
+   "title": "Profiling Hallucinations in Frontier LLMs for Entity Linking to Medical Ontologies"
+  },
+  {
+   "n": 6,
+   "url": "https://arxiv.org/abs/2407.05213v1",
+   "title": "BadCLM: Backdoor Attack in Clinical Language Models for Electronic Health Records"
+  },
+  {
+   "n": 7,
+   "url": "https://researchportal.murdoch.edu.au/esploro/outputs/journalArticle/irAE-GPT-leveraging-large-language-models-to/991005884944507891",
+   "title": "irAE-GPT: leveraging large language models to identify..."
+  },
+  {
+   "n": 8,
+   "url": "https://www.techtarget.com/healthtechanalytics/news/366590290/NYU-Large-Language-Model-Forecasts-Hospital-Readmissions-Length-of-Stay",
+   "title": "NYU Large Language Model Forecasts Hospital... | TechTarget"
+  },
+  {
+   "n": 9,
+   "url": "https://pubmed.ncbi.nlm.nih.gov/40692078/",
+   "title": "Improving mortality prediction after radiotherapy with large language..."
+  },
+  {
+   "n": 10,
+   "url": "https://arxiv.org/abs/2507.12774v1",
+   "title": "A Comprehensive Survey of Electronic Health Record Modeling: From Deep Learning Approaches to Large Language Models"
+  },
+  {
+   "n": 11,
+   "url": "https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1843535/full",
+   "title": "Frontiers | Generative artificial intelligence and large language models..."
+  },
+  {
+   "n": 12,
+   "url": "https://aclanthology.org/2025.findings-emnlp.356.pdf",
+   "title": "A Comprehensive Survey on the Trustworthiness of Large Language"
+  },
+  {
+   "n": 13,
+   "url": "https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1956708/full",
+   "title": "Frontiers | Artificial intelligence in biomedical visualization and..."
+  },
+  {
+   "n": 14,
+   "url": "https://arxiv.org/abs/2504.19179v1",
+   "title": "A Design Framework for operationalizing Trustworthy Artificial Intelligence in Healthcare: Requirements, Tradeoffs and Challenges for its Clinical Adoption"
+  },
+  {
+   "n": 15,
+   "url": "https://arxiv.org/abs/2501.01639v2",
+   "title": "Implications of Artificial Intelligence on Health Data Privacy and Confidentiality"
+  },
+  {
+   "n": 16,
+   "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10879008/",
+   "title": "Ethical and regulatory challenges of AI technologies in ..."
+  },
+  {
+   "n": 17,
+   "url": "https://www.thelancet.com/journals/landig/article/PIIS2589-7500(24)00061-X/fulltext",
+   "title": "Ethical and regulatory challenges of large language models in ..."
+  },
+  {
+   "n": 18,
+   "url": "https://arxiv.org/abs/2406.18841v5",
+   "title": "Navigating LLM Ethics: Advancements, Challenges, and Future Directions"
+  },
+  {
+   "n": 19,
+   "url": "https://link.springer.com/article/10.1007/s44217-025-00424-7",
+   "title": "A systematic literature review to implement large language model in..."
+  },
+  {
+   "n": 20,
+   "url": "https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2026.1830005/full",
+   "title": "Frontiers | Artificial intelligence and infodemic management..."
+  }
+ ],
+ "citation_stats": {
+  "claim_sentences": 30,
+  "cited": 26,
+  "uncited": 4,
+  "weakly_supported": 0,
+  "unknown_markers": 0,
+  "cited_ratio": 0.867,
+  "report_claim_sentences": 44,
+  "report_cited": 40,
+  "report_cited_ratio": 0.909,
+  "invalid_markers_removed": 0,
+  "sources_cited": 20,
+  "sources_consulted": 21
+ },
+ "coverage": [],
+ "open_questions": [
+  {
+   "text": "How do LLM-driven diagnostic and treatment recommendations perform in real-world clinical settings compared to simulated benchmarks?",
+   "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?"
+  },
+  {
+   "text": "What specific data ingestion, preprocessing, and real‑time streaming pipelines are required to feed EHR data into LLMs for clinical decision support?",
+   "sub_question": "How are large language models integrated into electronic health record systems and what data pipelines support their use?"
+  },
+  {
+   "text": "What quantitative measures of diagnostic accuracy do LLMs achieve across different medical specialties?",
+   "sub_question": "What evidence exists regarding the accuracy, bias, and safety of large language model outputs in medical decision‑making?"
+  },
+  {
+   "text": "How can informed consent be effectively obtained and documented for patients when LLMs process their health data?",
+   "sub_question": "What regulatory, ethical, and privacy concerns arise from deploying large language models in patient care settings?"
+  },
+  {
+   "text": "How can the effectiveness of specific governance tools such as model cards or the ASPIRE framework be empirically measured in clinical settings?",
+   "sub_question": "What mitigation strategies and governance frameworks are recommended to manage risks while maximizing benefits of large language models in healthcare?"
+  },
+  {
+   "text": "What strategies can mitigate hallucination risks when LLMs are used for clinical coding or other high-stakes tasks?",
+   "sub_question": "What clinical tasks are large language models currently used for, such as diagnosis assistance, treatment recommendation, or patient triage?"
+  }
+ ],
+ "contradictions": [],
+ "verify": {
+  "claims": [
+   {
+    "id": 1,
+    "text": "Large language models (LLMs) are being applied to a range of clinical tasks—including diagnosis, treatment recommendation, data structuring, and real‑time decision support within EHR systems—while also presenting notable risks such as hallucinations, security vulnerabilities, and regulatory/ethical challenges.",
+    "refs": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20
+    ]
+   },
+   {
+    "id": 2,
+    "text": "Mitigating these risks requires layered governance that combines technical safeguards, rigorous data governance, and regulatory oversight, alongside targeted validation and human oversight to ensure safe deployment in healthcare.",
+    "refs": [
+     18,
+     19,
+     20
+    ]
+   },
+   {
+    "id": 3,
+    "text": "LLMs can assist clinicians in diagnosing diseases by interpreting symptoms and histories, sometimes matching or exceeding physician performance on benchmark tasks.",
+    "refs": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": 4,
+    "text": "LLMs generate treatment recommendations aligned with guidelines and patient factors, supporting therapeutic decision‑making.",
+    "refs": [
+     1
+    ]
+   },
+   {
+    "id": 5,
+    "text": "Foundation models convert unstructured medical records into structured formats, facilitating analytics and workflow integration.",
+    "refs": [
+     4
+    ]
+   },
+   {
+    "id": 6,
+    "text": "LLMs are unsuitable for fully autonomous clinical coding due to frequent hallucination of medical codes, limiting reliability in that domain.",
+    "refs": [
+     5
+    ]
+   },
+   {
+    "id": 7,
+    "text": "Embedding LLMs in EHR systems enables real‑time clinical decision support, outcome prediction (e.g., readmission risk, length of stay), and improved data completeness for prognostic models.",
+    "refs": [
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   {
+    "id": 8,
+    "text": "Security risks such as backdoor attacks (e.g., BadCLM) demonstrate that LLMs can be compromised when specific triggers appear in inputs.",
+    "refs": [
+     6
+    ]
+   },
+   {
+    "id": 9,
+    "text": "Rapid adoption in specialties like sports medicine outpaces robust validation, raising concerns about accuracy, safety, and the need for expert oversight.",
+    "refs": [
+     11,
+     12
+    ]
+   },
+   {
+    "id": 10,
+    "text": "Vision‑language models exhibit fabricated anatomy and demographic bias, underscoring the limited reliability of AI outputs for complex medical content.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 11,
+    "text": "Regulatory frameworks (GDPR, European Health Data Space, HIPAA) impose requirements for explainability, accountability, and data protection on LLM deployments in healthcare.",
+    "refs": [
+     14,
+     15
+    ]
+   },
+   {
+    "id": 12,
+    "text": "Ethical issues include data privacy, consent, liability, and intellectual property contamination, prompting scrutiny of data provenance and usage rights.",
+    "refs": [
+     16,
+     17
+    ]
+   },
+   {
+    "id": 13,
+    "text": "Governance strategies—auditable decision‑making, model cards, citation capabilities, red‑teaming, independent auditing, and frameworks like ASPIRE—aim to detect hallucinations and ensure transparency.",
+    "refs": [
+     18,
+     11
+    ]
+   },
+   {
+    "id": 14,
+    "text": "Formal regulatory oversight and educational integration are recommended to balance risk management with the benefits of LLMs across health applications.",
+    "refs": [
+     19,
+     20
+    ]
+   },
+   {
+    "id": 15,
+    "text": "They are actively used to assist healthcare professionals in diagnosing diseases by interpreting patient symptoms and medical histories, leveraging their ability to perform simulated diagnostic reasoning that can match or exceed physician performance on benchmark tasks.",
+    "refs": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "id": 16,
+    "text": "In addition to diagnosis, LLMs can generate treatment recommendations that align with medical guidelines and consider individual patient factors, supporting clinicians in selecting appropriate therapeutic options.",
+    "refs": [
+     1
+    ]
+   },
+   {
+    "id": 17,
+    "text": "Another emerging application is the structuring of patient clinical data, where foundation models convert unstructured medical records into standardized, structured formats to facilitate downstream analytics and workflow integration.",
+    "refs": [
+     4
+    ]
+   },
+   {
+    "id": 18,
+    "text": "However, LLMs remain unsuitable for fully autonomous clinical coding because they frequently hallucinate medical codes, leading to unreliable outputs that limit their use in this specific domain.",
+    "refs": [
+     5
+    ]
+   },
+   {
+    "id": 19,
+    "text": "Large language models are being embedded directly into electronic health record (EHR) systems to deliver clinical decision support by extracting and interpreting the rich information contained in clinical notes, thereby enhancing decision‑making processes.",
+    "refs": [
+     6,
+     7
+    ]
+   },
+   {
+    "id": 20,
+    "text": "Integration can take the form of models that read EHR data in real time, as exemplified by NYUTron, which accesses patient records to generate predictions of outcomes such as readmission risk and length of stay across the NYU Langone Health network.",
+    "refs": [
+     8
+    ]
+   },
+   {
+    "id": 21,
+    "text": "These deployments rely on medium‑sized, fine‑tuned models trained on highly refined EHR datasets, enabling rapid implementation of predictive analytics within the healthcare infrastructure.",
+    "refs": [
+     8
+    ]
+   },
+   {
+    "id": 22,
+    "text": "Beyond outcome prediction, LLMs can restructure unstructured EHR content, improving the completeness of data used for survival and mortality forecasts, particularly in specialized contexts like radiotherapy.",
+    "refs": [
+     9
+    ]
+   },
+   {
+    "id": 23,
+    "text": "Effective use of LLMs in EHRs therefore depends on prompting strategies for diverse clinical tasks and fine‑tuning to align the models with domain‑specific language and objectives.",
+    "refs": [
+     10
+    ]
+   },
+   {
+    "id": 24,
+    "text": "However, the integration of LLMs also introduces security considerations, as demonstrated by the BadCLM backdoor attack, which shows that models can be compromised when specific triggers appear in inputs while otherwise performing accurately.",
+    "refs": [
+     6
+    ]
+   },
+   {
+    "id": 25,
+    "text": "LLMs such as ChatGPT, GPT‑3.5, and GPT‑4 are being rapidly incorporated into sports medicine for tasks ranging from training prescription to academic writing, reflecting a broader enthusiasm for their potential to enhance clinical decision‑making and patient care.",
+    "refs": [
+     11,
+     12
+    ]
+   },
+   {
+    "id": 26,
+    "text": "The speed of adoption has outstripped the generation of robust, domain‑specific validation evidence, leaving clinicians without clear data on the models’ clinical utility, accuracy, or safety in this field.",
+    "refs": [
+     11
+    ]
+   },
+   {
+    "id": 27,
+    "text": "Experts therefore recommend that practitioners prioritize validation studies that are specific to the medical domain rather than relying on general benchmark performance, and that any LLM output be used only under expert oversight to mitigate risks to patient safety.",
+    "refs": [
+     11
+    ]
+   },
+   {
+    "id": 28,
+    "text": "Parallel concerns arise from evaluations of related AI systems, such as text‑to‑image models, which consistently produce fabricated anatomy, incorrect labels, and exhibit demographic bias, highlighting the variability and limited reliability of AI outputs for complex medical structures or procedures.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 29,
+    "text": "While vision‑language models can aid in prompt refinement and annotation, they cannot guarantee scientific accuracy and may even rate flawed AI outputs more favorably than human experts, underscoring the need for careful human verification of AI‑generated content.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 30,
+    "text": "In Europe, the General Data Protection Regulation (GDPR) mandates explainability, accountability, and protection of individual rights when AI systems make automated decisions, including profiling in healthcare, thereby imposing strict requirements on LLM transparency and patient safeguards.",
+    "refs": [
+     14
+    ]
+   },
+   {
+    "id": 31,
+    "text": "Complementing GDPR, the European Health Data Space provides a regulatory structure that governs both the delivery of primary care and the secondary use of health data for research and policy, shaping how LLMs can be trained and applied across the health ecosystem.",
+    "refs": [
+     14
+    ]
+   },
+   {
+    "id": 32,
+    "text": "In the United States, the Health Insurance Portability and Accountability Act (HIPAA) serves a similar protective role, ensuring the security and privacy of health information and guarding against fraud and abuse, which extends to any LLM‑driven applications handling protected health information.",
+    "refs": [
+     15
+    ]
+   },
+   {
+    "id": 33,
+    "text": "Ethical concerns are equally prominent: virtual assistants and other LLM‑based tools raise questions about data interpretation, consent, liability, and the broader implications of privacy and security breaches.",
+    "refs": [
+     16
+    ]
+   },
+   {
+    "id": 34,
+    "text": "Specific ethical issues highlighted for LLMs include data privacy and usage rights, provenance of training data, and the risk of intellectual property contamination, reflecting worries that models may embed copyrighted material without proper licensing.",
+    "refs": [
+     17
+    ]
+   },
+   {
+    "id": 35,
+    "text": "Regulators are particularly focused on data provenance, scrutinizing the origins and integrity of the datasets used to train LLMs to ensure compliance with legal and ethical standards.",
+    "refs": [
+     17
+    ]
+   },
+   {
+    "id": 36,
+    "text": "Authors emphasize accountability and governance mechanisms such as auditable decision‑making, thorough documentation of data origins, interactive model cards, and built‑in citation capabilities to ensure traceability and transparency of model outputs.",
+    "refs": [
+     18
+    ]
+   },
+   {
+    "id": 37,
+    "text": "External scrutiny methods—including red‑teaming, independent auditing, and the use of the ASPIRE framework together with Knowledge Management Systems—provide additional oversight and help detect failures such as hallucinations, which are identified as a specific risk in clinical contexts.",
+    "refs": [
+     18,
+     11
+    ]
+   },
+   {
+    "id": 38,
+    "text": "Data governance practices, encompassing data quality controls, privacy safeguards, and clear stewardship policies, further reduce exposure to bias and misuse.",
+    "refs": [
+     11
+    ]
+   },
+   {
+    "id": 39,
+    "text": "Regulatory oversight is advocated as a higher‑level safeguard, with formal regulatory frameworks recommended to balance risk management with the maximization of LLM benefits across health applications.",
+    "refs": [
+     19
+    ]
+   },
+   {
+    "id": 40,
+    "text": "Complementary strategies extend to educational settings, where integrating LLMs into curricula under governance guidelines can enhance learning while preserving academic integrity, and to digital health communication, where targeted risk‑communication tactics are employed to counter misinformation and infodemic threats.",
+    "refs": [
+     19,
+     20
+    ]
+   }
+  ],
+  "evidence": {
+   "1": {
+    "title": "10 Exciting Project Ideas Using Large Language Models (LLMs)",
+    "url": "https://www.geeksforgeeks.org/blogs/project-ideas-using-large-language-models/",
+    "text": "- LLM-based Model: Utilize powerful language models like GPT-3 for code generation and debugging assistance.\n- Backend: Python or Node.js for handling API requests and responses.\n- Frontend: Design a user-friendly web-based interface using HTML, CSS, and JavaScript.\n9. Doc-Bot: Medical Diagnosis and Treatment Recommendations:\n…\nThe medical field can benefit greatly from LLMs by utilizing them for medical diagnosis and treatment recommendations. By training an LLM on extensive medical literature and patient data, you can develop a system that assists healthcare professionals in diagnosing diseases, suggesting treatment options, and providing relevant research papers. This project holds the potential to improve patient care and save lives.\n…\n- Diagnosis Assistance: Implement the LLM to assist healthcare professionals in diagnosing diseases based on patient symptoms and medical history.\n- T",
+    "facts": [
+     "Large Language Models can be used to assist healthcare professionals in diagnosing diseases based on patient symptoms and medical history.",
+     "Large Language Models can suggest appropriate treatment options for diagnosed conditions, taking into account medical guidelines and patient specifics."
+    ]
+   },
+   "2": {
+    "title": "State of clinical AI in 2026 | BMJ Digital Health & AI",
+    "url": "https://bmjdigitalhealth.bmj.com/content/2/1/e000113",
+    "text": "Clinical artificial intelligence (AI) has advanced rapidly, with frontier large language models now matching or exceeding physician performance on simulated diagnostic reasoning and clinical decision-support tasks.",
+    "facts": [
+     "Frontier large language models now match or exceed physician performance on simulated diagnostic reasoning and clinical decision-support tasks."
+    ]
+   },
+   "3": {
+    "title": "Large language models enhance diagnostic reasoning of medical...",
+    "url": "https://link.springer.com/article/10.1186/s12909-026-09079-w",
+    "text": "Benchmark evaluation of DeepSeek large language models in clinical decision-making. Nat Med.Comparative analysis of large language models and traditional diagnostic decision support systems for rare rheumatic disease identification. EULAR Rheumatol Open.",
+    "facts": [
+     "DeepSeek large language models were benchmarked in clinical decision-making, with a comparative analysis against traditional diagnostic decision support systems for identifying rare rheumatic diseases."
+    ]
+   },
+   "4": {
+    "title": "SoftTiger: A Clinical Foundation Model for Healthcare Workflows",
+    "url": "https://arxiv.org/abs/2403.00868v3",
+    "text": "To understand the potential for enhancing the workflows, we conducted a survey of various clinical downstream tasks, from associated research papers from arXiv and AI models in Hugging Face, including clinical language models (CLaMs) and foundation models for electronic medical records (FEMRs) (Wornow et al. 2023). We asked domain experts to provide rate for a Fibonnaciscale on the complexity and helpfulness of reported tasks, with results as shown in the Figure 1. The second challenge is associated with the input length constraints of LLMs. Most popular LLMs were trained using 4k-token context window, e.g., Llama-2, which is sufficient for most general-purpose tasks. An annotated sample of 620 clinical notes drawn from MIMIC IV (Johnson et al.\n…\nFigure 1: A survey on complexity and helpfulness of AI clinical tasks. In this work, we strategically focused on the tasks of patient clinical ",
+    "facts": [
+     "Clinical foundation models are being explored for the task of patient clinical data structuring, which involves converting unstructured medical records into structured formats."
+    ]
+   },
+   "5": {
+    "title": "Profiling Hallucinations in Frontier LLMs for Entity Linking to Medical Ontologies",
+    "url": "https://arxiv.org/abs/2611.18595v1",
+    "text": "Profiling Hallucinations in Frontier LLMs for Entity Linking to Medical Ontologies Logan Born1, Nishant Kambhatla1, Uliyana Kubasova1, Maryam Siahbani1,2, Andrei Vacariu1, Tim O’Connell1 and Anoop Sarkar1 1Emtelligent 2University of the Fraser Valley {lborn,nishant,uliyana,maryam,andrei,tim,anoop}@emtelligent.com Abstract The integration of Large Language Models (LLMs) into healthcare promises to revolutionize clinical documentation and interoperability, yet reliability remains a concern. This study presents a comprehensive analysis of hallucinations by frontier LLMs tasked with mapping clinical text to SNOMED CT. Through rigorous experimentation, we identify a critical reliability gap: LLMs hallucinate medical codes at a rate that currently renders them unsuitable for autonomous clinical coding applications.\n…\nWenbo Pan, Jie Xu, Qiguang Chen, Junhao Dong, Libo Qin, Xinfeng Li, Haining Y",
+    "facts": [
+     "Large Language Models are currently unsuitable for autonomous clinical coding applications because they hallucinate medical codes at a rate that renders them unreliable."
+    ]
+   },
+   "6": {
+    "title": "BadCLM: Backdoor Attack in Clinical Language Models for Electronic Health Records",
+    "url": "https://arxiv.org/abs/2407.05213v1",
+    "text": "BADCLM: BACKDOOR ATTACK IN CLINICAL LAN- GUAGE MODELS FOR ELECTRONIC HEALTH RECORDS Weimin Lyu1, Zexin Bi2, Fusheng Wang1, Chao Chen1 1 Stony Brook University, NY, USA 2 The Webb Schools, CA, USA ABSTRACT The advent of clinical language models integrated into electronic health records (EHR) for clinical decision support has marked a significant advancement, leveraging the depth of clinical notes for improved decision-making. Despite their success, the potential vulnerabilities of these models remain largely unexplored. This paper delves into the realm of backdoor attacks on clinical language models, introducing an innovative attention-based backdoor attack method, BadCLM (Bad Clinical Language Models).\n…\nThis technique clandestinely embeds a backdoor within the models, causing them to produce incorrect predictions when a pre-defined trigger is present in inputs, while functioning accurat",
+    "facts": [
+     "Clinical language models are integrated into electronic health record (EHR) systems to provide clinical decision support by leveraging the depth of clinical notes for improved decision-making.",
+     "The BadCLM backdoor attack demonstrates that such integrated models can be compromised when a pre‑defined trigger is present in inputs, while functioning accurately otherwise."
+    ]
+   },
+   "7": {
+    "title": "irAE-GPT: leveraging large language models to identify...",
+    "url": "https://researchportal.murdoch.edu.au/esploro/outputs/journalArticle/irAE-GPT-leveraging-large-language-models-to/991005884944507891",
+    "text": "Large language models (LLMs) have emerged as transformative technologies, revolutionising natural language understanding and generation across various domains, including medicine.",
+    "facts": [
+     "Large language models have emerged as transformative technologies, revolutionising natural language understanding and generation across various domains, including medicine."
+    ]
+   },
+   "8": {
+    "title": "NYU Large Language Model Forecasts Hospital... | TechTarget",
+    "url": "https://www.techtarget.com/healthtechanalytics/news/366590290/NYU-Large-Language-Model-Forecasts-Hospital-Readmissions-Length-of-Stay",
+    "text": "Getty Images\nResearchers at New York University (NYU) Grossman School of Medicine have developed a large language model (LLM) capable of predicting multiple clinical outcomes, including readmissions, and the tool has been deployed across NYU Langone Health.\n…\n“These results demonstrate that large language models make the development of ‘smart hospitals’ not only a possibility, but a reality,” said study senior author and neurosurgeon Eric K. Oermann, MD, in the study’s press release. “Since NYUTron reads information taken directly from the electronic health record, its predictive models can be easily built and quickly implemented through the healthcare system.”\n…\n“Much of the conversation around language models right now is around gargantuan, general-purpose models with billions of parameters, trained on messy datasets using hundreds or thousands of GPUs,” Oermann explained in the blog. ",
+    "facts": [
+     "NYUTron, a large language model developed by NYU Grossman School of Medicine, reads information directly from the electronic health record and has been deployed across NYU Langone Health to predict clinical outcomes such as readmissions and length of stay.",
+     "The deployment of NYUTron demonstrates that predictive models built from EHR data can be quickly implemented through the healthcare system using medium‑sized models trained on highly refined data."
+    ]
+   },
+   "9": {
+    "title": "Improving mortality prediction after radiotherapy with large language...",
+    "url": "https://pubmed.ncbi.nlm.nih.gov/40692078/",
+    "text": "Large language models (LLMs) offer a novel approach to structuring unstructured electronic health record (EHR) data, potentially improving survival predictions by integrating comprehensive clinical information.",
+    "facts": [
+     "Large language models can structure unstructured electronic health record data, potentially improving survival predictions by integrating comprehensive clinical information.",
+     "LLMs offer a novel approach to structuring unstructured EHR data, which may enhance mortality prediction after radiotherapy."
+    ]
+   },
+   "10": {
+    "title": "A Comprehensive Survey of Electronic Health Record Modeling: From Deep Learning Approaches to Large Language Models",
+    "url": "https://arxiv.org/abs/2507.12774v1",
+    "text": "2018. A Systematic Survey of Electronic Health Record Modeling: From Deep Learning Approaches to Large Language Models. In Proceedings of Make sure to enter the correct conference title from your rights confirmation emai (Conference acronym ’XX). ACM, New York, NY, USA, 59 pages. https://doi.org/XXXXXXX.XXXXXXX 1 INTRODUCTION Electronic Health Records (EHRs) serve as comprehensive, longitudinal repositories of patient health data, encompassing heterogeneous modalities such as demographics, laboratory results, diagnoses, procedures, treatments, and clinical notes. As illustrated in Figure 1, these data can be systematically characterized along three fundamental pairwise dimensions: time, feature, and value.\n…\nA Systematic Survey of Electronic Health Record Modeling: From Deep Learning Approaches to Large Language ModelsConference acronym ’XX, June 03–05, 2018, Woodstock, NY These models s",
+    "facts": [
+     "Large language models support a broad range of clinical tasks through prompting, and fine‑tuning is essential for improving task‑specific performance and domain alignment in EHR modeling."
+    ]
+   },
+   "11": {
+    "title": "Frontiers | Generative artificial intelligence and large language models...",
+    "url": "https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1843535/full",
+    "text": "Generative artificial intelligence (GenAI), particularly large language models (LLMs) such as ChatGPT, GPT-3.5, and GPT-4, is rapidly being integrated into sports medicine practice. These tools are increasingly used by health professionals, coaches, and athletes for training prescription, rehabilitation, nutrition, mental health support, injury prevention, and academic writing. However, their adoption has outpaced the development of robust evidence regarding their clinical utility, accuracy, and safety, and no comprehensive synthesis of this emerging field currently exists.\n…\nIn the interim, practitioners and researchers should prioritise domain-specific validation evidence over general benchmark performance when making deployment decisions, and apply LLM outputs with appropriate expert oversight to mitigate potential risks to patient safety.\n5 Conclusion\n…\n- 26. SolomonTPJLayeMJ. The sp",
+    "facts": [
+     "Generative artificial intelligence, particularly large language models such as ChatGPT, GPT-3.5, and GPT-4, is rapidly being integrated into sports medicine practice for training prescription, rehabilitation, nutrition, mental health support, injury prevention, and academic writing.",
+     "The adoption of large language models in sports medicine has outpaced the development of robust evidence regarding their clinical utility, accuracy, and safety.",
+     "Practitioners and researchers should prioritise domain‑specific validation evidence over general benchmark performance when making deployment decisions, and apply LLM outputs with appropriate expert oversight to mitigate potential risks to patient safety.",
+     "Data governance is identified as a mitigation strategy to manage risks associated with large language models in healthcare.",
+     "Hallucination by large language models is recognized as a risk that requires mitigation strategies in healthcare applications."
+    ]
+   },
+   "12": {
+    "title": "A Comprehensive Survey on the Trustworthiness of Large Language",
+    "url": "https://aclanthology.org/2025.findings-emnlp.356.pdf",
+    "text": "The application of large language models (LLMs) in healthcare holds significant promise for enhancing clinical decision-making, medi-cal research, and patient care.",
+    "facts": [
+     "Large language models (LLMs) have significant promise for enhancing clinical decision-making, medical research, and patient care."
+    ]
+   },
+   "13": {
+    "title": "Frontiers | Artificial intelligence in biomedical visualization and...",
+    "url": "https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2026.1956708/full",
+    "text": "Current evidence indicates that diffusion models can rapidly generate visually persuasive and customizable drafts, whereas segmentation-guided synthesis and anatomy-aware 3D methods offer stronger structural control in defined tasks. However, direct evaluations of general-purpose text-to-image systems consistently identify fabricated anatomy, incorrect labels, prompt- and model-dependent variability, demographic bias, and limited reliability for complex structures or procedures. Vision-language models can support prompt refinement, annotation, and consistency checking, but they cannot ensure scientific accuracy and may evaluate flawed AI outputs more favorably than human experts. Evidence supporting AI-generated educational illustrations remains less mature than that supporting conventional 3D and virtual-reality learning environments.\n…\nThis review has several limitations. First, PubMed",
+    "facts": [
+     "Direct evaluations of general-purpose text-to-image systems consistently identify fabricated anatomy, incorrect labels, prompt- and model-dependent variability, demographic bias, and limited reliability for complex structures or procedures.",
+     "Vision-language models can support prompt refinement, annotation, and consistency checking, but they cannot ensure scientific accuracy and may evaluate flawed AI outputs more favorably than human experts."
+    ]
+   },
+   "14": {
+    "title": "A Design Framework for operationalizing Trustworthy Artificial Intelligence in Healthcare: Requirements, Tradeoffs and Challenges for its Clinical Adoption",
+    "url": "https://arxiv.org/abs/2504.19179v1",
+    "text": "Additionally, models must achieve high training and especially testing accuracies when operating in the health domain due to severe consequences of false positives and false negatives outcomes. Other aspects, such as reliability and reproducibility, must also be considered to ensure the AI systems functions correctly across a variety of inputs and settings. 3. Privacy and data governance aim to protect sensitive patient information accessed by AI systems operating in healthcare environments. Additionally, the models’ parameters and hyperparameters must be secured, and any leaks during the data preprocessing phase must be prevented. The quality of the data impact directly on the model’s performance and its integrity 4\n…\nThese principles support the European Health Data Space, a key regulatory framework addressing both primary (healthcare provision) and secondary (research and policymaking",
+    "facts": [
+     "The General Data Protection Regulation (GDPR) is a comprehensive legal framework that ensures explainability and accountability in automated decisions and protects individual rights in profiling and AI-driven healthcare.",
+     "The European Health Data Space is a regulatory framework that addresses both primary healthcare provision and secondary uses of health data, such as research and policymaking."
+    ]
+   },
+   "15": {
+    "title": "Implications of Artificial Intelligence on Health Data Privacy and Confidentiality",
+    "url": "https://arxiv.org/abs/2501.01639v2",
+    "text": "2 research and healthcare delivery are limitless (3). AI’s robust ability to leverage large amounts of clinical data has revolutionized medical diagnostics, decision-making, and personalized medicine. However, at the same time, it also increases ethical concerns about patient confidentiality and privacy (4). However, this integration comes with many risks and challenges, and AI must be integrated with the healthcare system ethically and legally, particularly concerning the privacy and confidentiality of health data (5,6). The privacy of patient information is a top priority and is guaranteed under laws and regulations such as the Health Insurance Portability and Accountability Act (HIPAA) in the United States (7). HIPAA is a crucial regulatory framework that ensures the security and privacy of health information, protecting patient information against fraud and abuse.\n…\n5 AI has signific",
+    "facts": [
+     "The Health Insurance Portability and Accountability Act (HIPAA) in the United States is a regulatory framework that ensures the security and privacy of health information, protecting patient information against fraud and abuse."
+    ]
+   },
+   "16": {
+    "title": "Ethical and regulatory challenges of AI technologies in ...",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10879008/",
+    "text": "In this context, AI healthcare applications driven by advanced computational algorithms hold the potential to implement individual and efficient integrated programs for patients, particularly in remote and home care settings. However, it is important to acknowledge that these significant innovations pose substantial future challenges in clinical and care settings, encompassing ethical, legal, and regulatory considerations.\n…\nThese apps also assist patients in symptom checking, appointment scheduling, medication management, patient education, and the self-management of chronic diseases [63]. Various digital platforms, including mobile apps, voice assistants, and websites, can facilitate access to care assistive. However, the utilization of virtual assistants in healthcare is not without its challenges, encompassing ethical concerns, data interpretation, privacy, security, consent, and lia",
+    "facts": [
+     "Virtual assistants in healthcare raise ethical concerns, data interpretation issues, privacy and security challenges, consent problems, and liability issues."
+    ]
+   },
+   "17": {
+    "title": "Ethical and regulatory challenges of large language models in ...",
+    "url": "https://www.thelancet.com/journals/landig/article/PIIS2589-7500(24)00061-X/fulltext",
+    "text": "Apr 23, 2024 · In this Viewpoint, we highlight ethical concerns stemming from the perspectives of users, developers, and regulators, notably focusing on data privacy and rights of use, data provenance, intellectual property contamination, and broad applications and plasticity of LLMs.",
+    "facts": [
+     "The Viewpoint highlights ethical concerns related to data privacy and rights of use, data provenance, intellectual property contamination, and the broad applications and plasticity of large language models.",
+     "Regulators are concerned about the data provenance of large language models, questioning the origins and integrity of the data used to train them.",
+     "Intellectual property contamination is a regulatory issue, as large language models may inadvertently incorporate copyrighted material without proper licensing."
+    ]
+   },
+   "18": {
+    "title": "Navigating LLM Ethics: Advancements, Challenges, and Future Directions",
+    "url": "https://arxiv.org/abs/2406.18841v5",
+    "text": "5 Misinformation and Disinformation in LLM 13 Unintentional propagation, Mechanisms to detect misinformation, Misleading content, Influence on public opinion, Discourse shaping, Contextual accuracy, Contextually inappropriate content, Unintentional or intentional biases, Regulatory compliance of misinformation. 6 Accountability and Governance in LLM 22 Auditable decision-making, Accountability in the Healthcare sector, Risks of AI recommendations, Documentation of data origins, Interactive model cards, Integration of a citation mechanism in LLMs, Stakeholder accountability, External scrutiny methods, Redteaming and auditing, ASPIRE framework, Knowledge Management Systems (KMS).\n…\n11 Discussing ethical frameworks in LLMs, some studies addresses methodological challenges in developing morally informed AI systems, particularly in the case of recent models such as GPT-3 and RoBERTa. It notes",
+    "facts": [
+     "The authors recommend accountability and governance measures for LLMs in healthcare, including auditable decision‑making, documentation of data origins, interactive model cards, and integration of a citation mechanism.",
+     "They also suggest external scrutiny methods such as red‑teaming and auditing, and reference the ASPIRE framework and Knowledge Management Systems (KMS) as governance tools."
+    ]
+   },
+   "19": {
+    "title": "A systematic literature review to implement large language model in...",
+    "url": "https://link.springer.com/article/10.1007/s44217-025-00424-7",
+    "text": "The findings suggest strategies for integrating LLMs into educational frameworks to enhance learning outcomes while preserving educational integrity.\nSimilar content being viewed by others\n1 Introduction\n…\nBy providing these insights, the study aims to guide educators, policymakers, and technology developers in harnessing the benefits of LLMs while mitigating their risks.\n1.2 Structure of the article\nThe remaining parts of the paper are divided as:\n…\n- Meskó B, Topol EJ. The imperative for regulatory oversight of large language models (or generative AI) in healthcare. NPJ Digit Med. 2023;6(1):120.\n- Denny, P., et al., Robosourcing Educational Resources--Leveraging Large Language Models for Learnersourcing. arXiv preprint arXiv:2211.04715, 2022.",
+    "facts": [
+     "The review cites the imperative for regulatory oversight of large language models in healthcare, indicating that regulatory frameworks are recommended to manage risks while maximizing benefits.",
+     "It proposes strategies for integrating LLMs into educational frameworks that enhance learning outcomes while preserving educational integrity, implying governance measures to mitigate risks."
+    ]
+   },
+   "20": {
+    "title": "Frontiers | Artificial intelligence and infodemic management...",
+    "url": "https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2026.1830005/full",
+    "text": "Studies examining digital communication interventions, risk communication strategies, and institutional responses designed to mitigate the impact of misinformation and support evidence-based public health messaging.",
+    "facts": [
+     "Risk communication strategies are recommended to mitigate the impact of misinformation in digital health interventions."
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,603 @@
+{
+ "id": "what-progress-has-been-made-in-quantum-error-correction-and-",
+ "question": "What progress has been made in quantum error correction and what limits scaling?",
+ "generated_at": "2026-11-24",
+ "models": {
+  "fast": "openai/gpt-oss-20b",
+  "strong": "openai/gpt-oss-120b"
+ },
+ "review_loop": false,
+ "seconds": 136.2,
+ "usage": {
+  "total_tokens": 24226,
+  "calls": 22,
+  "estimated_cost_usd": null,
+  "by_agent": {
+   "planner": {
+    "calls": 1,
+    "prompt_tokens": 309,
+    "completion_tokens": 194,
+    "total_tokens": 503
+   },
+   "searcher": {
+    "calls": 5,
+    "prompt_tokens": 1311,
+    "completion_tokens": 147,
+    "total_tokens": 1458
+   },
+   "reader": {
+    "calls": 10,
+    "prompt_tokens": 9853,
+    "completion_tokens": 1747,
+    "total_tokens": 11600
+   },
+   "synthesizer": {
+    "calls": 5,
+    "prompt_tokens": 4154,
+    "completion_tokens": 1978,
+    "total_tokens": 6132
+   },
+   "writer": {
+    "calls": 1,
+    "prompt_tokens": 2391,
+    "completion_tokens": 2142,
+    "total_tokens": 4533
+   }
+  },
+  "by_model": {
+   "openai/gpt-oss-120b": {
+    "calls": 7,
+    "prompt_tokens": 6854,
+    "completion_tokens": 4314,
+    "total_tokens": 11168
+   },
+   "openai/gpt-oss-20b": {
+    "calls": 15,
+    "prompt_tokens": 11164,
+    "completion_tokens": 1894,
+    "total_tokens": 13058
+   }
+  },
+  "truncated_calls": 0
+ },
+ "report": "## Executive Summary\nRecent experiments have demonstrated logical qubits with error rates below the fault‑tolerance threshold, indicating that practical quantum error correction is becoming feasible [1]. However, scaling remains limited by hardware constraints such as qubit coherence, gate fidelity, and connectivity, as well as by the substantial overhead required for low logical error rates [5][6][8][12].\n\n## Key Findings\n- Logical qubits with error probabilities beneath the fault‑tolerance threshold have been realized, marking a pivotal milestone for fault‑tolerant architectures [1].  \n- The surface code is considered the most promising scheme due to its compact lattice and high error threshold, making it attractive for scalable designs [2].  \n- Fractal surface codes retain non‑zero thresholds on fractal lattices, extending high‑threshold properties to exotic geometries [3].  \n- Conventional stabilizer color codes offer high thresholds and transversal Clifford operations but lack chirality and fermionic excitations, limiting certain computational capabilities [4].  \n- Superconducting hardware is constrained by limited coherence, imperfect gates, and restricted connectivity; the QRN method can extend runtimes to ~24× coherence time, yet short lifetimes remain a bottleneck for many applications [5][6].  \n- Multi‑qubit gate fidelity degrades with state complexity and hardware noise, exemplified by Toffoli gate performance on a 127‑qubit processor [7].  \n- Concatenated quantum Hamming codes require ~162 physical qubits per logical qubit to achieve a logical error rate of 10⁻¹⁰, illustrating steep resource costs for very low error targets [8].  \n- High‑rate quantum LDPC codes can reduce qubit overhead dramatically, with IBM’s Gross code using ~24 physical qubits per logical qubit and achieving a ~9.3× reduction compared with a distance‑13 surface‑code patch (excluding routing overhead) [9][10].  \n- Overhead comparisons are sensitive to routing assumptions; surface‑code figures often include a ×3 routing multiplier, potentially biasing advantages of qLDPC codes by up to a factor of three [10].  \n- Using fewer ancilla qubits than stabilizers can lower logical error rates under realistic noise models, offering overhead optimization beyond raw qubit counts [11].  \n- Scaling of the surface code is limited by physical error rates; overly noisy qubits cause larger lattices to degrade performance rather than improve it [12].  \n- System‑level innovations such as a six‑layer stack address latency sources in real‑time QEC, emphasizing the shift from algorithmic to engineering challenges [13].  \n- Tensor‑network error mitigation (TEM) provides the lowest sampling overhead among advanced mitigation techniques, supporting scalable quantum advantage [14].  \n- IBM’s Executor primitive and combined mitigation frameworks enable modular integration of soft measurement data and reduce runtime overhead by orders of magnitude [15][16].  \n- GPU‑accelerated decoder frameworks (e.g., Pelagos) supply the computational power needed for high‑throughput decoding in large‑scale processors [17].\n\n## Detailed Analysis\nRecent experimental work has succeeded in constructing logical qubits whose error rates fall below the fault‑tolerance threshold, representing a pivotal milestone for fault‑tolerant quantum computing architectures [1]. This achievement demonstrates that practical quantum error correction is becoming feasible, as logical error probabilities are now sufficiently low to enable scalable quantum algorithms when combined with further error suppression techniques.\n\nThe surface code is widely regarded as the most promising quantum error correction scheme because it combines a relatively compact lattice layout with a notably high error threshold, making it attractive for scalable quantum architectures [2]. Building on this topological approach, fractal surface codes (FSCs) extend the surface code concept to fractal lattices with a Hausdorff dimension of 2+ϵ, and they have been shown to retain non‑zero thresholds for both bit‑flip and phase‑flip errors, indicating that the high‑threshold property can survive in more exotic geometries [3]. In parallel, conventional stabilizer color codes implement bosonic ℤ₂ or ℤ_d topological orders and support transversal Clifford operations, which contribute to their high error thresholds; however, they do not exhibit chirality or host fermionic excitations, limiting certain computational capabilities despite their robust error‑correction performance [4].\n\nCurrent hardware constraints on superconducting quantum processors manifest primarily as limited qubit coherence, imperfect gate fidelity, and restricted qubit connectivity. While the QRN method can extend circuit runtimes to about 24 times the intrinsic qubit coherence time, suggesting that coherence does not directly bound the forecast horizon for certain algorithms, most near‑term applications still suffer from short qubit lifetimes that must be mitigated through careful design and dynamic approaches [5]. In practice, modern IBM devices exhibit modest qubit counts, coherence times, and gate fidelities that necessitate error‑mitigation techniques for useful computation [6]. The Toffoli (CCX) gate, a benchmark for multi‑qubit operations, illustrates how noise and limited connectivity degrade performance: on a 127‑qubit processor the fidelity drops from 81.470% in noise‑aware simulation to 56.368% on real hardware for GHZ inputs, and to 63.689% for W‑state inputs compared with 79.900% simulated, highlighting state‑dependent fidelity loss driven by hardware noise and connectivity constraints [7]. These observations collectively indicate that achieving large‑scale, error‑corrected quantum processors will require substantial improvements in qubit coherence, higher‑fidelity multi‑qubit gates, and more flexible connectivity architectures.\n\nOverhead requirements for quantum error‑correcting codes vary dramatically with the target logical error rate and the type of code employed. For a concatenated quantum Hamming code scheme, achieving a logical error rate of 10⁻¹⁰ demands roughly 162 physical qubits per logical qubit, illustrating the steep resource cost of very low error targets even with relatively simple codes [8]. While the same concatenated protocol can in principle reach an even lower logical error rate of 10⁻²⁴, the exact qubit overhead for that regime is not reported, leaving a gap in quantitative scaling information for deep concatenation levels [8]. In contrast, high‑rate quantum LDPC (qLDPC) codes can dramatically reduce the qubit count per logical qubit; IBM’s Gross code [[12][12]] operates with about 24 physical qubits per logical qubit and is reported to use roughly 9.3‑times fewer qubits than a distance‑13 surface‑code patch when routing overhead is excluded [9][10]. However, cross‑code comparisons must account for differing treatment of routing overhead: the surface‑code figures typically include a ×3 multiplier for routing, whereas the qLDPC numbers count the full computational footprint without such a multiplier, potentially biasing the apparent advantage of qLDPC codes by up to a factor of three [10]. Practical considerations such as the number of ancillary qubits used for syndrome extraction can also influence logical error rates; using fewer ancillas than stabilizers can effectively lower logical errors under realistic noise models, suggesting that overhead can be optimized beyond raw qubit counts [11]. Finally, the surface‑code’s scalability is limited by physical error rates: if the underlying physical qubits are too noisy, enlarging the surface‑code lattice to achieve lower logical error rates can actually degrade performance because the added qubits introduce more errors than the code can correct [12].\n\nTo overcome the scaling bottlenecks that arise in real‑time quantum error correction (QEC), recent work proposes both architectural and algorithmic innovations. A six‑layer system stack is introduced to tackle critical latency sources such as QEC round time, tail latency, and the coordination of the end‑to‑end data path, thereby providing a structured framework for integrating decoding, control, and mitigation components [13]. Benchmark studies of leading decoders for surface codes and quantum low‑density parity‑check (qLDPC) codes reveal that the primary challenge has shifted from raw algorithmic capability to system‑level engineering, emphasizing the need for such stack‑based designs [13]. On the algorithmic side, tensor‑network error mitigation (TEM) offers the lowest sampling overhead among advanced mitigation techniques and meets the universal lower cost bound, positioning it as a highly scalable approach toward quantum advantage [14]. Complementary to TEM, the Executor primitive in IBM’s software stack exposes soft measurement information, enabling modular mitigation strategies that can be layered with QEC processes [15]. A mitigation framework that combines virtual noise scaling with a layered architecture further reduces runtime overhead by orders of magnitude compared with conventional zero‑noise extrapolation, and it is compatible with dynamic circuits as well as error‑detection and QEC schemes, facilitating seamless integration into existing quantum pipelines [16]. Finally, the Pelagos framework demonstrates that GPU acceleration can be leveraged to evaluate QEC decoders at scale, providing the computational horsepower needed for the high‑throughput decoding demanded by large‑scale quantum processors [17].\n\n## Contradictions and Conflicting Evidence\n- F1 suggests qubit coherence does not limit circuit runtime, whereas F3 states short qubit lifetimes are a typical difficulty for large‑scale computations.\n\n## Knowledge Gaps and Limitations\n- Open question: Which specific quantum error correction codes (e.g., surface code, Bacon-Shor, color code) were used in these recent demonstrations?  \n- Open question: What are the quantitative threshold values for surface codes, fractal surface codes, and color codes, and how do they compare under realistic noise models?  \n- Open question: How will advances in qubit connectivity architectures (e.g., 3‑D integration or modular designs) impact the scalability of error‑corrected processors?  \n- Open question: What is the explicit physical‑qubit overhead required to achieve a logical error rate of 10⁻²⁴ with concatenated quantum Hamming codes?  \n- Open question: How do the proposed six‑layer stack and GPU‑accelerated decoder frameworks compare in terms of overall latency and resource consumption when deployed on near‑term quantum hardware?  \n- Open question: What are the precise numerical logical error rates reported for each demonstrated code and how do they compare to the physical error rates of the underlying hardware?\n\n## References\n\n[1] The Decade of Fault-Tolerant Quantum Computing... | Preprints.org — https://www.preprints.org/manuscript/202509.2238\n[2] Quantum Network Routing based on Surface Code Error Correction — https://arxiv.org/abs/2606.12781v1\n[3] Quantum error correction with fractal topological codes — https://arxiv.org/abs/2201.03568v3\n[4] 3D Chiral Color Codes — https://www.emergentmind.com/topics/chiral-color-codes\n[5] Realizing Unstructured PDE Forecasting on Superconducting Quantum Processors — https://arxiv.org/abs/2611.10351v1\n[6] Experimental demonstration of Robust Amplitude Estimation on near-term quantum devices for chemistry applications — https://arxiv.org/abs/2410.00686v1\n[7] Practical fidelity limits of Toffoli gates in superconducting ... — https://link.springer.com/article/10.1140/epjp/s13360-026-08168-5\n[8] Concatenate codes, save qubits — https://arxiv.org/abs/2402.09606v2\n[9] QEC Encoding Overhead 2026 | Physical Qubits Per Logical Qubit — https://entangledfuture.com/quantum-error-correction/encoding-overhead/\n[10] How many physical qubits does one logical qubit need? — https://www.quantum-expectations.com/answers/physical-qubits-per-logical-qubit\n[11] Scheduling of syndrome measurements with a few ancillary qubits — https://arxiv.org/abs/2508.07913v1\n[12] Making quantum error correction work — https://research.google/blog/making-quantum-error-correction-work/\n[13] Real-Time Quantum Error Correction System Stack: Architecture ... — https://arxiv.org/abs/2605.30765\n[14] [2403.13542] Scalability of quantum error mitigation ...From error mitigation to fault-tolerant quantum computing ...Scalable Quantum Error Correction | Quantum MachinesIBM and AMD accelerate quantum error correction decoding at scaleOpportunities in full-stack design of low-overhead fault ...Quantum Error Correction - IBM Research — https://arxiv.org/abs/2403.13542\n[15] From error mitigation to fault-tolerant quantum computing ... — https://www.ibm.com/quantum/blog/qec-continuum\n[16] Quantum Error Mitigation: Orders of Magnitude Runtime Reduction — https://www.emergentmind.com/papers/2601.22785\n[17] IBM and AMD accelerate quantum error correction decoding at scale — https://newsroom.ibm.com/blog-pelagos-accelerates-quantum-error-correction-decoding-at-scale",
+ "references": [
+  {
+   "n": 1,
+   "url": "https://www.preprints.org/manuscript/202509.2238",
+   "title": "The Decade of Fault-Tolerant Quantum Computing... | Preprints.org"
+  },
+  {
+   "n": 2,
+   "url": "https://arxiv.org/abs/2606.12781v1",
+   "title": "Quantum Network Routing based on Surface Code Error Correction"
+  },
+  {
+   "n": 3,
+   "url": "https://arxiv.org/abs/2201.03568v3",
+   "title": "Quantum error correction with fractal topological codes"
+  },
+  {
+   "n": 4,
+   "url": "https://www.emergentmind.com/topics/chiral-color-codes",
+   "title": "3D Chiral Color Codes"
+  },
+  {
+   "n": 5,
+   "url": "https://arxiv.org/abs/2611.10351v1",
+   "title": "Realizing Unstructured PDE Forecasting on Superconducting Quantum Processors"
+  },
+  {
+   "n": 6,
+   "url": "https://arxiv.org/abs/2410.00686v1",
+   "title": "Experimental demonstration of Robust Amplitude Estimation on near-term quantum devices for chemistry applications"
+  },
+  {
+   "n": 7,
+   "url": "https://link.springer.com/article/10.1140/epjp/s13360-026-08168-5",
+   "title": "Practical fidelity limits of Toffoli gates in superconducting ..."
+  },
+  {
+   "n": 8,
+   "url": "https://arxiv.org/abs/2402.09606v2",
+   "title": "Concatenate codes, save qubits"
+  },
+  {
+   "n": 9,
+   "url": "https://entangledfuture.com/quantum-error-correction/encoding-overhead/",
+   "title": "QEC Encoding Overhead 2026 | Physical Qubits Per Logical Qubit"
+  },
+  {
+   "n": 10,
+   "url": "https://www.quantum-expectations.com/answers/physical-qubits-per-logical-qubit",
+   "title": "How many physical qubits does one logical qubit need?"
+  },
+  {
+   "n": 11,
+   "url": "https://arxiv.org/abs/2508.07913v1",
+   "title": "Scheduling of syndrome measurements with a few ancillary qubits"
+  },
+  {
+   "n": 12,
+   "url": "https://research.google/blog/making-quantum-error-correction-work/",
+   "title": "Making quantum error correction work"
+  },
+  {
+   "n": 13,
+   "url": "https://arxiv.org/abs/2605.30765",
+   "title": "Real-Time Quantum Error Correction System Stack: Architecture ..."
+  },
+  {
+   "n": 14,
+   "url": "https://arxiv.org/abs/2403.13542",
+   "title": "[2403.13542] Scalability of quantum error mitigation ...From error mitigation to fault-tolerant quantum computing ...Scalable Quantum Error Correction | Quantum MachinesIBM and AMD accelerate quantum error correction decoding at scaleOpportunities in full-stack design of low-overhead fault ...Quantum Error Correction - IBM Research"
+  },
+  {
+   "n": 15,
+   "url": "https://www.ibm.com/quantum/blog/qec-continuum",
+   "title": "From error mitigation to fault-tolerant quantum computing ..."
+  },
+  {
+   "n": 16,
+   "url": "https://www.emergentmind.com/papers/2601.22785",
+   "title": "Quantum Error Mitigation: Orders of Magnitude Runtime Reduction"
+  },
+  {
+   "n": 17,
+   "url": "https://newsroom.ibm.com/blog-pelagos-accelerates-quantum-error-correction-decoding-at-scale",
+   "title": "IBM and AMD accelerate quantum error correction decoding at scale"
+  }
+ ],
+ "citation_stats": {
+  "claim_sentences": 24,
+  "cited": 19,
+  "uncited": 5,
+  "weakly_supported": 0,
+  "unknown_markers": 0,
+  "cited_ratio": 0.792,
+  "report_claim_sentences": 41,
+  "report_cited": 36,
+  "report_cited_ratio": 0.878,
+  "invalid_markers_removed": 1,
+  "sources_cited": 17,
+  "sources_consulted": 17
+ },
+ "coverage": [],
+ "open_questions": [
+  {
+   "text": "Which specific quantum error correction codes (e.g., surface code, Bacon-Shor, color code) were used in these recent demonstrations?",
+   "sub_question": "What are the most recent experimental demonstrations of quantum error correction codes and their achieved logical error rates?"
+  },
+  {
+   "text": "What are the quantitative threshold values for surface codes, fractal surface codes, and color codes, and how do they compare under realistic noise models?",
+   "sub_question": "Which quantum error correction codes (e.g., surface code, color code, bosonic codes) have shown the greatest theoretical thresholds and why?"
+  },
+  {
+   "text": "How will advances in qubit connectivity architectures (e.g., 3‑D integration or modular designs) impact the scalability of error‑corrected processors?",
+   "sub_question": "What hardware-specific challenges (such as qubit coherence, gate fidelity, connectivity) currently limit the implementation of large-scale error-corrected quantum processors?"
+  },
+  {
+   "text": "What is the explicit physical‑qubit overhead required to achieve a logical error rate of 10⁻²⁴ with concatenated quantum Hamming codes?",
+   "sub_question": "How do overhead requirements (number of physical qubits per logical qubit) scale with target logical error rates for different codes?"
+  },
+  {
+   "text": "How do the proposed six‑layer stack and GPU‑accelerated decoder frameworks compare in terms of overall latency and resource consumption when deployed on near‑term quantum hardware?",
+   "sub_question": "What proposed architectural or algorithmic strategies aim to mitigate scaling bottlenecks in quantum error correction?"
+  },
+  {
+   "text": "What are the precise numerical logical error rates reported for each demonstrated code and how do they compare to the physical error rates of the underlying hardware?",
+   "sub_question": "What are the most recent experimental demonstrations of quantum error correction codes and their achieved logical error rates?"
+  }
+ ],
+ "contradictions": [
+  "F1 suggests qubit coherence does not limit circuit runtime, whereas F3 states short qubit lifetimes are a typical difficulty for large‑scale computations."
+ ],
+ "verify": {
+  "claims": [
+   {
+    "id": 1,
+    "text": "Recent experiments have demonstrated logical qubits with error rates below the fault‑tolerance threshold, indicating that practical quantum error correction is becoming feasible.",
+    "refs": [
+     1
+    ]
+   },
+   {
+    "id": 2,
+    "text": "However, scaling remains limited by hardware constraints such as qubit coherence, gate fidelity, and connectivity, as well as by the substantial overhead required for low logical error rates.",
+    "refs": [
+     5,
+     6,
+     8,
+     12
+    ]
+   },
+   {
+    "id": 3,
+    "text": "Logical qubits with error probabilities beneath the fault‑tolerance threshold have been realized, marking a pivotal milestone for fault‑tolerant architectures.",
+    "refs": [
+     1
+    ]
+   },
+   {
+    "id": 4,
+    "text": "The surface code is considered the most promising scheme due to its compact lattice and high error threshold, making it attractive for scalable designs.",
+    "refs": [
+     2
+    ]
+   },
+   {
+    "id": 5,
+    "text": "Fractal surface codes retain non‑zero thresholds on fractal lattices, extending high‑threshold properties to exotic geometries.",
+    "refs": [
+     3
+    ]
+   },
+   {
+    "id": 6,
+    "text": "Conventional stabilizer color codes offer high thresholds and transversal Clifford operations but lack chirality and fermionic excitations, limiting certain computational capabilities.",
+    "refs": [
+     4
+    ]
+   },
+   {
+    "id": 7,
+    "text": "Superconducting hardware is constrained by limited coherence, imperfect gates, and restricted connectivity; the QRN method can extend runtimes to ~24× coherence time, yet short lifetimes remain a bottleneck for many applications.",
+    "refs": [
+     5,
+     6
+    ]
+   },
+   {
+    "id": 8,
+    "text": "Multi‑qubit gate fidelity degrades with state complexity and hardware noise, exemplified by Toffoli gate performance on a 127‑qubit processor.",
+    "refs": [
+     7
+    ]
+   },
+   {
+    "id": 9,
+    "text": "Concatenated quantum Hamming codes require ~162 physical qubits per logical qubit to achieve a logical error rate of 10⁻¹⁰, illustrating steep resource costs for very low error targets.",
+    "refs": [
+     8
+    ]
+   },
+   {
+    "id": 10,
+    "text": "High‑rate quantum LDPC codes can reduce qubit overhead dramatically, with IBM’s Gross code using ~24 physical qubits per logical qubit and achieving a ~9.3× reduction compared with a distance‑13 surface‑code patch (excluding routing overhead).",
+    "refs": [
+     9,
+     10
+    ]
+   },
+   {
+    "id": 11,
+    "text": "Overhead comparisons are sensitive to routing assumptions; surface‑code figures often include a ×3 routing multiplier, potentially biasing advantages of qLDPC codes by up to a factor of three.",
+    "refs": [
+     10
+    ]
+   },
+   {
+    "id": 12,
+    "text": "Using fewer ancilla qubits than stabilizers can lower logical error rates under realistic noise models, offering overhead optimization beyond raw qubit counts.",
+    "refs": [
+     11
+    ]
+   },
+   {
+    "id": 13,
+    "text": "Scaling of the surface code is limited by physical error rates; overly noisy qubits cause larger lattices to degrade performance rather than improve it.",
+    "refs": [
+     12
+    ]
+   },
+   {
+    "id": 14,
+    "text": "System‑level innovations such as a six‑layer stack address latency sources in real‑time QEC, emphasizing the shift from algorithmic to engineering challenges.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 15,
+    "text": "Tensor‑network error mitigation (TEM) provides the lowest sampling overhead among advanced mitigation techniques, supporting scalable quantum advantage.",
+    "refs": [
+     14
+    ]
+   },
+   {
+    "id": 16,
+    "text": "IBM’s Executor primitive and combined mitigation frameworks enable modular integration of soft measurement data and reduce runtime overhead by orders of magnitude.",
+    "refs": [
+     15,
+     16
+    ]
+   },
+   {
+    "id": 17,
+    "text": "GPU‑accelerated decoder frameworks (e.g., Pelagos) supply the computational power needed for high‑throughput decoding in large‑scale processors.",
+    "refs": [
+     17
+    ]
+   },
+   {
+    "id": 18,
+    "text": "Recent experimental work has succeeded in constructing logical qubits whose error rates fall below the fault‑tolerance threshold, representing a pivotal milestone for fault‑tolerant quantum computing architectures.",
+    "refs": [
+     1
+    ]
+   },
+   {
+    "id": 19,
+    "text": "The surface code is widely regarded as the most promising quantum error correction scheme because it combines a relatively compact lattice layout with a notably high error threshold, making it attractive for scalable quantum architectures.",
+    "refs": [
+     2
+    ]
+   },
+   {
+    "id": 20,
+    "text": "Building on this topological approach, fractal surface codes (FSCs) extend the surface code concept to fractal lattices with a Hausdorff dimension of 2+ϵ, and they have been shown to retain non‑zero thresholds for both bit‑flip and phase‑flip errors, indicating that the high‑threshold property can survive in more exotic geometries.",
+    "refs": [
+     3
+    ]
+   },
+   {
+    "id": 21,
+    "text": "In parallel, conventional stabilizer color codes implement bosonic ℤ₂ or ℤ_d topological orders and support transversal Clifford operations, which contribute to their high error thresholds; however, they do not exhibit chirality or host fermionic excitations, limiting certain computational capabilities despite their robust error‑correction performance.",
+    "refs": [
+     4
+    ]
+   },
+   {
+    "id": 22,
+    "text": "While the QRN method can extend circuit runtimes to about 24 times the intrinsic qubit coherence time, suggesting that coherence does not directly bound the forecast horizon for certain algorithms, most near‑term applications still suffer from short qubit lifetimes that must be mitigated through careful design and dynamic approaches.",
+    "refs": [
+     5
+    ]
+   },
+   {
+    "id": 23,
+    "text": "In practice, modern IBM devices exhibit modest qubit counts, coherence times, and gate fidelities that necessitate error‑mitigation techniques for useful computation.",
+    "refs": [
+     6
+    ]
+   },
+   {
+    "id": 24,
+    "text": "The Toffoli (CCX) gate, a benchmark for multi‑qubit operations, illustrates how noise and limited connectivity degrade performance: on a 127‑qubit processor the fidelity drops from 81.470% in noise‑aware simulation to 56.368% on real hardware for GHZ inputs, and to 63.689% for W‑state inputs compared with 79.900% simulated, highlighting state‑dependent fidelity loss driven by hardware noise and connectivity constraints.",
+    "refs": [
+     7
+    ]
+   },
+   {
+    "id": 25,
+    "text": "For a concatenated quantum Hamming code scheme, achieving a logical error rate of 10⁻¹⁰ demands roughly 162 physical qubits per logical qubit, illustrating the steep resource cost of very low error targets even with relatively simple codes.",
+    "refs": [
+     8
+    ]
+   },
+   {
+    "id": 26,
+    "text": "While the same concatenated protocol can in principle reach an even lower logical error rate of 10⁻²⁴, the exact qubit overhead for that regime is not reported, leaving a gap in quantitative scaling information for deep concatenation levels.",
+    "refs": [
+     8
+    ]
+   },
+   {
+    "id": 27,
+    "text": "In contrast, high‑rate quantum LDPC (qLDPC) codes can dramatically reduce the qubit count per logical qubit; IBM’s Gross code [] operates with about 24 physical qubits per logical qubit and is reported to use roughly 9.3‑times fewer qubits than a distance‑13 surface‑code patch when routing overhead is excluded.",
+    "refs": [
+     12,
+     9,
+     10
+    ]
+   },
+   {
+    "id": 28,
+    "text": "However, cross‑code comparisons must account for differing treatment of routing overhead: the surface‑code figures typically include a ×3 multiplier for routing, whereas the qLDPC numbers count the full computational footprint without such a multiplier, potentially biasing the apparent advantage of qLDPC codes by up to a factor of three.",
+    "refs": [
+     10
+    ]
+   },
+   {
+    "id": 29,
+    "text": "Practical considerations such as the number of ancillary qubits used for syndrome extraction can also influence logical error rates; using fewer ancillas than stabilizers can effectively lower logical errors under realistic noise models, suggesting that overhead can be optimized beyond raw qubit counts.",
+    "refs": [
+     11
+    ]
+   },
+   {
+    "id": 30,
+    "text": "Finally, the surface‑code’s scalability is limited by physical error rates: if the underlying physical qubits are too noisy, enlarging the surface‑code lattice to achieve lower logical error rates can actually degrade performance because the added qubits introduce more errors than the code can correct.",
+    "refs": [
+     12
+    ]
+   },
+   {
+    "id": 31,
+    "text": "A six‑layer system stack is introduced to tackle critical latency sources such as QEC round time, tail latency, and the coordination of the end‑to‑end data path, thereby providing a structured framework for integrating decoding, control, and mitigation components.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 32,
+    "text": "Benchmark studies of leading decoders for surface codes and quantum low‑density parity‑check (qLDPC) codes reveal that the primary challenge has shifted from raw algorithmic capability to system‑level engineering, emphasizing the need for such stack‑based designs.",
+    "refs": [
+     13
+    ]
+   },
+   {
+    "id": 33,
+    "text": "On the algorithmic side, tensor‑network error mitigation (TEM) offers the lowest sampling overhead among advanced mitigation techniques and meets the universal lower cost bound, positioning it as a highly scalable approach toward quantum advantage.",
+    "refs": [
+     14
+    ]
+   },
+   {
+    "id": 34,
+    "text": "Complementary to TEM, the Executor primitive in IBM’s software stack exposes soft measurement information, enabling modular mitigation strategies that can be layered with QEC processes.",
+    "refs": [
+     15
+    ]
+   },
+   {
+    "id": 35,
+    "text": "A mitigation framework that combines virtual noise scaling with a layered architecture further reduces runtime overhead by orders of magnitude compared with conventional zero‑noise extrapolation, and it is compatible with dynamic circuits as well as error‑detection and QEC schemes, facilitating seamless integration into existing quantum pipelines.",
+    "refs": [
+     16
+    ]
+   },
+   {
+    "id": 36,
+    "text": "Finally, the Pelagos framework demonstrates that GPU acceleration can be leveraged to evaluate QEC decoders at scale, providing the computational horsepower needed for the high‑throughput decoding demanded by large‑scale quantum processors.",
+    "refs": [
+     17
+    ]
+   }
+  ],
+  "evidence": {
+   "1": {
+    "title": "The Decade of Fault-Tolerant Quantum Computing... | Preprints.org",
+    "url": "https://www.preprints.org/manuscript/202509.2238",
+    "text": "Quantum error correction (QEC) has transitioned from a theoretical promise to an experimental reality, with recent demonstrations of below-threshold logical qubits marking a turning point in the quest for fault-tolerant quantum computing.",
+    "facts": [
+     "Recent experimental demonstrations have achieved logical qubits with error rates below the fault‑tolerance threshold, marking a turning point in fault‑tolerant quantum computing."
+    ]
+   },
+   "2": {
+    "title": "Quantum Network Routing based on Surface Code Error Correction",
+    "url": "https://arxiv.org/abs/2606.12781v1",
+    "text": "Thus, instead of directly utilizing the unstable physical qubits, numerous papers have proposed designs for quantum code designs. These quantum codes are composed of clusters of physical qubits and function as logical qubits [35]. B. Surface Codes Among various quantum error correction codes, surface code stands out as the most promising one due to its compact size and high error threshold. Illustrated in Fig. 2(a), each 2\n…\nFor a comprehensive introduction into Quantum Computation and Quantum Information, we refer readers to [1], and for a detailed explanation on Surface Codes, [36] is recommended. Fig. 3. Example Surface Code Error Correction. (a.1) Example syndrome pattern of a surface code, induced by the (a.2) example error pattern. The edges in red represent data qubits with errors, and the vertices in red represent their induced syndromes. (b)(c) Example decoding results from deco",
+    "facts": [
+     "Surface code is considered the most promising quantum error correction code due to its compact size and high error threshold."
+    ]
+   },
+   "3": {
+    "title": "Quantum error correction with fractal topological codes",
+    "url": "https://arxiv.org/abs/2201.03568v3",
+    "text": "Quantum error correction with fractal topological codes Arpit Dua1, Tomas Jochym-O’Connor2,3, and Guanyu Zhu2,3 1Department of Physics and Institute for Quantum Information and Matter, California Institute of Technology, Pasadena, CA 91125 USA 2IBM Quantum, IBM T.J. Watson Research Center, Yorktown Heights, NY 10598 USA 3IBM Almaden Research Center, San Jose, CA 95120 USA Recently, a class of fractal surface codes (FSCs), has been constructed on fractal lattices with Hausdorff dimension 2+ϵ, which admits a fault-tolerant non-Clifford CCZ gate [1]. We investigate the performance of such FSCs as fault-tolerant quantum memories. We prove that there exist decoding strategies with non-zero thresholds for bit-flip and phase-flip errors in the FSCs with Hausdorff dimension 2 + ϵ.\n…\nIn particular, there exists a fault-tolerant single-shot implementation of the non-Clifford CCZ gate in the 3D sur",
+    "facts": [
+     "Fractal surface codes (FSCs) constructed on fractal lattices with Hausdorff dimension 2+ϵ admit non-zero thresholds for both bit-flip and phase-flip errors."
+    ]
+   },
+   "4": {
+    "title": "3D Chiral Color Codes",
+    "url": "https://www.emergentmind.com/topics/chiral-color-codes",
+    "text": "Chiral color codes are a class of three-dimensional stabilizer codes constructed within the gauge color code framework. These codes realize fermionic and chiral topological orders, notably supporting ℤ_dα anyon theories with anomalous chiral surface topological order. On closed manifolds, the codes exhibit a unique ground state after condensation of bulk transparent excitations, and for qubit systems (d = 2), the model reduces to a single copy of the fermionic toric code. Chiral color codes permit single-shot error correction and code switching to other stabilizer color codes, making them platforms for realizing and manipulating fermions and chiral anyons (Lee et al., 22 Sep 2025).\n…\nConventional stabilizer color codes realize bosonic ℤ₂ or ℤ_d topological orders with transversal Clifford gates and high error thresholds but lack chirality and fermionic excitations. Chiral color codes ext",
+    "facts": [
+     "Conventional stabilizer color codes realize bosonic ℤ₂ or ℤ_d topological orders with transversal Clifford gates and high error thresholds but lack chirality and fermionic excitations."
+    ]
+   },
+   "5": {
+    "title": "Realizing Unstructured PDE Forecasting on Superconducting Quantum Processors",
+    "url": "https://arxiv.org/abs/2611.10351v1",
+    "text": "Simulating high dimensional unstructured Partial Differential Equations (PDEs) with quantum processors is a major challenge with significant potential benefit. Existing methods have been demonstrated at small qubit counts, on simplifications of realistic problems. We implement a quantum reservoir network (QRN) for forecasting high-dimensional unstructured PDEs using up to 52 qubits on IBM superconducting hardware. Our method is gradient-free and does not suffer from the challenges of variational quantum algorithms. Instead, the QRN provides a large kernel space, up to 2^52 dimensions and beyond the reach of exact classical simulation, that remains useful under current hardware noise levels. Furthermore, a partial measure-and-reset mechanism enables total circuit runtime for ~24 times the qubit coherence time, so qubit lifetimes do not limit the forecast horizon. Thus, our method enables ",
+    "facts": [
+     "The QRN method on IBM superconducting hardware uses a partial measure-and-reset mechanism that allows the total circuit runtime to be approximately 24 times the qubit coherence time, indicating that qubit lifetimes do not limit the forecast horizon.",
+     "Hardware noise and short qubit lifetimes are typical difficulties in predicting large‑scale PDEs, but these are mitigated through careful design considerations and a dynamic approach in the QRN implementation."
+    ]
+   },
+   "6": {
+    "title": "Experimental demonstration of Robust Amplitude Estimation on near-term quantum devices for chemistry applications",
+    "url": "https://arxiv.org/abs/2410.00686v1",
+    "text": "Abstract This study explores hardware implementation of Robust Amplitude Estimation (RAE) on IBM quantum devices, demonstrating its application in quantum chemistry for one- and two-qubit Hamiltonian systems. Known for potentially offering quadratic speedups over traditional methods in estimating expectation values, RAE is evaluated under realistic noisy conditions. Our experiments provide detailed insights into the practical challenges associated with RAE. We achieved a significant reduction in sampling requirements compared to direct measurement techniques. In estimating the ground state energy of the hydrogen molecule, the RAE implementation demonstrated two orders of magnitude better accuracy for the two-qubit experiments and achieved chemical accuracy.\n…\nSince modern devices are limited in the qubit count, coherence times, and gate fidelities, the near-term quantum algorithms must b",
+    "facts": [
+     "Modern IBM quantum devices are limited in qubit count, coherence times, and gate fidelities, requiring error mitigation techniques or noise models for near‑term algorithms."
+    ]
+   },
+   "7": {
+    "title": "Practical fidelity limits of Toffoli gates in superconducting ...",
+    "url": "https://link.springer.com/article/10.1140/epjp/s13360-026-08168-5",
+    "text": "High-fidelity multi-qubit gates are essential for near-term quantum computing, underpinning both quantum algorithms and fault-tolerant protocols. The Toffoli (CCX) gate is central to quantum error correction and arithmetic operations, yet its performance on current quantum hardware remains constrained by noise and connectivity limitations. This work presents a comprehensive, hardware-aware characterization and benchmarking of the Toffoli gate implemented on IBM’s 127-qubit superconducting quantum processors. Using experimental quantum state tomography (QST), we evaluate the end-to-end output-state fidelity for three algorithmically relevant input states—Greenberger–Horne–Zeilinger (GHZ), W, and uniform superposition—across three execution environments: noise-free simulation, noise-aware simulation, and real hardware.\n…\nFor each input state, the experimental sequence consists of state pre",
+    "facts": [
+     "The performance of the Toffoli (CCX) gate on IBM’s 127‑qubit superconducting processors is constrained by noise and connectivity limitations, as evidenced by a drop from 81.470% fidelity in noise‑aware simulation to 56.368% on real hardware for GHZ input states.",
+     "For W input states, the Toffoli gate fidelity on real hardware is 63.689%, compared to 79.900% in noise‑aware simulation, demonstrating state‑dependent fidelity loss due to hardware noise and connectivity constraints."
+    ]
+   },
+   "8": {
+    "title": "Concatenate codes, save qubits",
+    "url": "https://arxiv.org/abs/2402.09606v2",
+    "text": "The recent development of constant-overhead protocols [1–7] substantially reduces the space overhead, i.e., the required number of physical qubits per logical qubit, compared to the conventional protocols such as those based on the surface code [8, 9] and the concatenated Steane code [10]. In particular, the most recent development [4] based on the concatenation of quantum Hamming codes [10, 11] is promising for the implementation of FTQC since Ref. [4] explicitly clarifies the full details of the protocol for implementing logical gates and efficient decoders, making it possible to realize universal quantum computation in a fault-tolerant way. Toward the practical implementation, however, it is indispensable to optimize the original protocol in Ref. [4] to improve its threshold, which is, by construction, at least as bad as the concatenated Steane code.\n…\nThe logical error rate is calcul",
+    "facts": [
+     "For the protocol based on concatenation of quantum Hamming codes, achieving a logical error rate of 10⁻¹⁰ requires a space overhead of 162 physical qubits per logical qubit.",
+     "The same protocol can reach a logical error rate of 10⁻²⁴, though the corresponding space overhead is not specified in the text."
+    ]
+   },
+   "9": {
+    "title": "QEC Encoding Overhead 2026 | Physical Qubits Per Logical Qubit",
+    "url": "https://entangledfuture.com/quantum-error-correction/encoding-overhead/",
+    "text": "Encoding Overhead\nThe gap between today's logical qubit demonstrations and fault-tolerant utility is not just a count problem, it's an overhead problem. How many physical qubits does each application actually require, and what determines that number?\nWhat Is Encoding Overhead?\n…\n- Sufficient LQ count for the target algorithm (thousands for RSA-2048)\n- Sufficient code distance to push logical error rates to about 10⁻⁹ per operation or lower for 10⁹-operation circuits\n- Universal gate set, T gates with acceptable overhead, not just Clifford gates\n…\nHigh-rate qLDPC codes such as IBM's gross code design (24 physical qubits per logical qubit) would shrink the logical register substantially, excluding magic state factories. If such codes work at scale, the timeline could shorten, but no qLDPC code has yet been shown on hardware at the distances needed, as of October 2026.\nKeep going",
+    "facts": [
+     "High-rate qLDPC codes such as IBM's gross code design use 24 physical qubits per logical qubit, potentially reducing the logical register size."
+    ]
+   },
+   "10": {
+    "title": "How many physical qubits does one logical qubit need?",
+    "url": "https://www.quantum-expectations.com/answers/physical-qubits-per-logical-qubit",
+    "text": "Overhead depends on the code, the code distance d (which must grow as the target error rate shrinks), and what is counted. The surface-code figure includes a ×3 routing/overhead multiplier; the qLDPC figure counts the full computational footprint (data + syndrome ancillas + logic-processing unit) but no routing multiplier, so cross-code comparisons are tilted up to ~3× in the qLDPC direction, an asymmetry stated here because it is stated in the model's own caveats.\n…\nCompared like-for-like (routing multiplier excluded from both sides), the Gross code ([[144, 12, 12]], Bravyi et al., Nature 2024 (IBM)) needs ~9.3× fewer qubits per logical qubit than a distance-13 surface-code patch, consistent with the paper's own \"10× fewer qubits\" claim for storage alone.\nCompute it yourself\n…\nEvery number on this page is computed from the same open model that powers the interactive evaluator and the MC",
+    "facts": [
+     "The Gross code [[144,12,12]] requires about 9.3 times fewer qubits per logical qubit than a distance‑13 surface‑code patch when routing overhead is excluded.",
+     "The surface‑code figure includes a ×3 routing/overhead multiplier, whereas the qLDPC figure counts the full computational footprint but no routing multiplier, causing cross‑code comparisons to be tilted up to ~3× in the qLDPC direction."
+    ]
+   },
+   "11": {
+    "title": "Scheduling of syndrome measurements with a few ancillary qubits",
+    "url": "https://arxiv.org/abs/2508.07913v1",
+    "text": "We demonstrated our proposal by applying it to surface codes, and we generated syndrome measurement circuits under several constraints of total qubit count. As a result, we find that balanced data and ancillary qubit counts achieve the lower logical error rates under a fixed total number of physical qubits. Thisresultindicatesthatusingfewerancillary qubits than the number of stabilizers can be effective for reducing logical error rates in a practical noise model. 1 Introduction Quantum error correction (QEC) is a vital technology for performing large-scale and faulttolerant quantum computing in practical applications. In the QEC process, logical qubits are represented by several physical qubits called data qubits, and errors are detected via syndrome measurements. These measurements can be performed with indirect Pauli measurements using ancillary physical qubits.\n…\nIt is known that if t",
+    "facts": [
+     "Using fewer ancillary qubits than the number of stabilizers can effectively reduce logical error rates in a practical noise model."
+    ]
+   },
+   "12": {
+    "title": "Making quantum error correction work",
+    "url": "https://research.google/blog/making-quantum-error-correction-work/",
+    "text": "Surface code logical qubits of increasing sizes, each able to correct more errors than the last.If the error rate of the physical qubits is too high, these extra errors overwhelm the error correction so that making the lattice bigger just makes the processor’s performance worse.",
+    "facts": [
+     "If the physical qubit error rate is too high, increasing the size of a surface‑code lattice can worsen processor performance because the additional errors overwhelm error correction."
+    ]
+   },
+   "13": {
+    "title": "Real-Time Quantum Error Correction System Stack: Architecture ...",
+    "url": "https://arxiv.org/abs/2605.30765",
+    "text": "Quantum Physics\nTitle:Real-Time Quantum Error Correction System Stack: Architecture, Algorithms, and Engineering Practice\nView PDF HTML (experimental)\n…\nAbstract:Quantum error correction (QEC) is transitioning from physical feasibility demonstrations to systems engineering challenges. Google has achieved below-threshold performance on distance-5/7 surface codes, while Riverlane and Rigetti have demonstrated hardware-integrated low-latency feedback loops. These milestones indicate that the core challenge of real-time decoding has shifted from algorithmic capability to system-level engineering. However, a substantial engineering gap remains between laboratory demonstrations and scalable fault-tolerant quantum computing (FTQC).\n…\nThis white paper addresses three questions: (1) Where are the real bottlenecks in real-time QEC: beyond average decoder speed, the constraints lie in QEC round tim",
+    "facts": [
+     "The white paper proposes a six-layer system stack to address real-time quantum error correction bottlenecks such as QEC round time, tail latency, and end-to-end data path coordination.",
+     "Benchmarking of major decoders for surface codes and quantum low-density parity-check (qLDPC) codes shows that algorithmic capability has shifted to system-level engineering for real-time decoding."
+    ]
+   },
+   "14": {
+    "title": "[2403.13542] Scalability of quantum error mitigation ...From error mitigation to fault-tolerant quantum computing ...Scalable Quantum Error Correction | Quantum MachinesIBM and AMD accelerate quantum error correction decoding at scaleOpportunities in full-stack design of low-overhead fault ...Quantum Error Correction - IBM Research",
+    "url": "https://arxiv.org/abs/2403.13542",
+    "text": "Quantum Physics\nTitle:Scalability of quantum error mitigation techniques: from utility to advantage\nView PDF HTML (experimental)\n…\nHere we demonstrate three key results that pave the way for the leap from quantum utility to quantum advantage: (1) we present a thorough derivation of random and systematic errors associated to the most advanced error mitigation strategies, including probabilistic error cancellation (PEC), zero noise extrapolation (ZNE) with probabilistic error amplification, and tensor-network error mitigation (TEM); (2) we prove that TEM (i) has the lowest sampling overhead among all three techniques under realistic noise, (ii) is optimal, in the sense that it saturates the universal lower cost bound for error mitigation, and (iii) is therefore the most promising approach to quantum advantage; (3) we propose a concrete notion of practical quantum advantage in terms of the ",
+    "facts": [
+     "Tensor-network error mitigation (TEM) has the lowest sampling overhead among advanced error mitigation techniques and saturates the universal lower cost bound, making it the most promising approach toward quantum advantage."
+    ]
+   },
+   "15": {
+    "title": "From error mitigation to fault-tolerant quantum computing ...",
+    "url": "https://www.ibm.com/quantum/blog/qec-continuum",
+    "text": "Quantum error mitigation and quantum error correction are often framed as tools for different eras of quantum computing: mitigation for near-term devices and correction for scalable fault tolerance. In practice, however, we see a continuous path from error mitigation to error correction. Optimizing across a spectrum of error-correcting techniques is key to scaling from trusted quantum computations to applications that matter for the world.\n…\nWhen used in tandem with packages such as qiskit-noise-learning, qiskit-mitigation, and Samplomatic, the directed execution model allows quantum information scientists to design custom noise learning protocols, implement modular error mitigation strategies, and customize sampling randomizations, respectively. In addition, researchers can now use the Executor primitive to return state information together with kerneled results (known as IQ points), ex",
+    "facts": [
+     "The Executor primitive in IBM’s quantum software stack returns state information together with kernel results, exposing soft information about measurement outcomes to facilitate modular error mitigation strategies."
+    ]
+   },
+   "16": {
+    "title": "Quantum Error Mitigation: Orders of Magnitude Runtime Reduction",
+    "url": "https://www.emergentmind.com/papers/2601.22785",
+    "text": "Orders of magnitude runtime reduction in quantum error mitigation\n…\nAbstract: Quantum error mitigation (QEM) infers noiseless expectation values by combining outcomes from intentionally modified, noisy variants of a target quantum circuit. Unlike quantum error correction, QEM requires no additional hardware resources and is therefore routinely employed in experiments on contemporary quantum processors. A central limitation of QEM is its substantial sampling overhead, which necessitates long execution times where device noise may drift, potentially compromising the reliability of standard mitigation protocols. QEM strategies based on agnostic noise amplification (ANA) are intrinsically resilient to such noise variations, but their sampling cost remains a major practical bottleneck.\n…\nHere we introduce a mitigation framework that combines virtual noise scaling with a layered mitigation arc",
+    "facts": [
+     "The proposed mitigation framework combines virtual noise scaling with a layered mitigation architecture, yielding orders of magnitude reduction in runtime overhead compared to conventional zero-noise extrapolation post-processing.",
+     "The framework is compatible with dynamic circuits and can be seamlessly integrated with error detection and quantum error correction schemes."
+    ]
+   },
+   "17": {
+    "title": "IBM and AMD accelerate quantum error correction decoding at scale",
+    "url": "https://newsroom.ibm.com/blog-pelagos-accelerates-quantum-error-correction-decoding-at-scale",
+    "text": "Nov 16, 2026 · IBM and AMD released Pelagos, a new open-source framework for evaluating quantum error-correction decoders at scale. Pelagos uses GPU acceleration to help researchers run large decoder-evaluation campaigns more efficiently across modern computing infrastructure.",
+    "facts": [
+     "Pelagos is an open-source framework that uses GPU acceleration to evaluate quantum error‑correction decoders at scale."
+    ]
+   }
+  }
+ }
+}
