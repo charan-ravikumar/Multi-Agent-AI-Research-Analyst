@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from tools.web_search import search_web
+from research_analyst.retrieval.web_search import search_web
 
 
 async def main() -> None:

@@ -1622,7 +1622,7 @@ wheels = [
 [[package]]
 name = "multi-agent-ai-research-analyst"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "ddgs" },
     { name = "google-genai" },

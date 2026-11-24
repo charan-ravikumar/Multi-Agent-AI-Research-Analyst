@@ -42,7 +42,7 @@ from tests.helpers import FakeLLM, initial_state  # noqa: E402,F401
 @pytest.fixture(autouse=True)
 def fake_redis(monkeypatch):
     """Route every redis_store call to an in-process fakeredis."""
-    import memory.redis_store as rs
+    import research_analyst.memory.redis_store as rs
     client = fakeredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(rs, "_client", client)
     return client
@@ -56,18 +56,18 @@ def no_page_fetching(monkeypatch):
     async def _no_arxiv(*a, **kw):
         return []
 
-    monkeypatch.setattr("agents.searcher.fetch_many", _none)
-    monkeypatch.setattr("agents.searcher.search_arxiv", _no_arxiv)
+    monkeypatch.setattr("research_analyst.agents.searcher.fetch_many", _none)
+    monkeypatch.setattr("research_analyst.agents.searcher.search_arxiv", _no_arxiv)
 
 
 @pytest.fixture(autouse=True)
 def reset_llm_state():
-    from core import tracing
-    from core.usage import tracker
-    from llm import client
+    from research_analyst.observability import tracing
+    from research_analyst.observability.usage import tracker
+    from research_analyst.llm import client
     tracing.reset_for_tests()
     tracker.reset()
-    from tools import arxiv as _ax
+    from research_analyst.retrieval import arxiv as _ax
     _ax._cache.clear()
     _ax._cooldown_until = 0.0
     _ax._last_call = 0.0
@@ -78,11 +78,11 @@ def reset_llm_state():
 @pytest.fixture
 def run_graph(monkeypatch):
     """run_graph(fake_llm, search_fn, auto_approve=True) -> (final_state, fake_llm)"""
-    from orchestrator.graph import app
+    from research_analyst.pipeline.graph import app
 
     def _run(fake: FakeLLM, search, auto_approve: bool = True, review_rounds: int | None = None):
-        monkeypatch.setattr("llm.generate", fake)
-        monkeypatch.setattr("agents.searcher.search_web", search)
+        monkeypatch.setattr("research_analyst.llm.generate", fake)
+        monkeypatch.setattr("research_analyst.agents.searcher.search_web", search)
         cfg = {"configurable": {"thread_id": str(uuid.uuid4())}}
         st = initial_state(auto_approve)
         if review_rounds is not None:

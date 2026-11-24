@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))   # Streamlit Cloud does not install the project itself
 
 os.environ.setdefault("SEARCH_MAX_RESULTS", "5")
 os.environ.setdefault("READER_MAX_CONCURRENT_LLM_CALLS", "2")
@@ -47,10 +47,10 @@ import uuid
 # ── third-party ────────────────────────────────────────────────────────────────
 import streamlit as st
 
-from app.about import ABOUT_MD, SAMPLE_QUESTIONS  # noqa: E402
-from app.secrets_env import export_secrets_to_env  # noqa: E402
-from core.gaps import curate_gaps  # noqa: E402
-from core.progress import progress  # noqa: E402
+from research_analyst.ui.about import ABOUT_MD, SAMPLE_QUESTIONS  # noqa: E402
+from research_analyst.ui.secrets_env import export_secrets_to_env  # noqa: E402
+from research_analyst.grounding.gaps import curate_gaps  # noqa: E402
+from research_analyst.observability.progress import progress  # noqa: E402
 
 # Streamlit Cloud secrets -> environment, BEFORE config.Settings is first imported (it is imported lazily
 # below).  Handles secrets pasted under a [section] header or in lower case.  Local runs have no
@@ -71,7 +71,7 @@ TRACE_TAIL = 10     # number of recent trace events to show
 @st.cache_resource
 def _load_graph():
     """Import and cache the compiled LangGraph app across all Streamlit reruns."""
-    from orchestrator.graph import app  # noqa: PLC0415
+    from research_analyst.pipeline.graph import app  # noqa: PLC0415
     return app
 
 
@@ -163,8 +163,8 @@ def _research_thread(
     asyncio.set_event_loop(loop)
     try:
         from langgraph.types import Command  # noqa: PLC0415
-        from config import settings  # noqa: PLC0415
-        from core import tracing  # noqa: PLC0415
+        from research_analyst.config import settings  # noqa: PLC0415
+        from research_analyst.observability import tracing  # noqa: PLC0415
 
         async def _run():
             sid = cfg.get("configurable", {}).get("session_id", "")
@@ -254,7 +254,7 @@ def _start_followup(question: str) -> None:
     """Button callback: start over with a follow-up question prefilled (the user still presses Start)."""
     base = (st.session_state.get("query") or "").strip()
     text = f"{base} — {question}" if base and question.lower() not in base.lower() else question
-    from config import settings  # noqa: PLC0415
+    from research_analyst.config import settings  # noqa: PLC0415
     _reset_state()
     st.session_state["query_input"] = text[: settings.max_query_chars]
 
@@ -349,7 +349,7 @@ def _set_query(q: str) -> None:
 
 
 def _missing_provider_keys() -> list[str]:
-    from config import settings  # noqa: PLC0415
+    from research_analyst.config import settings  # noqa: PLC0415
     return [name for name, val in (("GROQ_API_KEY", settings.groq_api_key),
                                    ("GEMINI_API_KEY", settings.gemini_api_key)) if not val]
 
@@ -390,7 +390,7 @@ def _phase_idle() -> None:
     clean_query = None
     if submitted:
         try:
-            from core.sanitize import validate_query  # noqa: PLC0415
+            from research_analyst.safety.sanitize import validate_query  # noqa: PLC0415
             clean_query = validate_query(query)
         except ValueError as exc:
             st.error(str(exc))
@@ -411,7 +411,7 @@ def _phase_planning() -> None:
     asyncio.run() is safe here: Streamlit does not hold a running event loop
     between script reruns (verified against 1.58.0).
     """
-    from models import ResearchState  # noqa: PLC0415
+    from research_analyst.models import ResearchState  # noqa: PLC0415
 
     st.markdown(f"**Query:** {st.session_state.query}")
 
@@ -437,7 +437,7 @@ def _phase_planning() -> None:
         )
         cfg = {"configurable": {"thread_id": st.session_state.thread_id}}
         try:
-            from core import tracing  # noqa: PLC0415
+            from research_analyst.observability import tracing  # noqa: PLC0415
 
             async def _plan():
                 with tracing.run_span("planning", st.session_state.session_id, st.session_state.query):
@@ -606,7 +606,7 @@ def _phase_done() -> None:
     # Final report
     final_report = state.get("final_report", "")
     if final_report:
-        from core.sanitize import sanitize_report_markdown  # noqa: PLC0415
+        from research_analyst.safety.sanitize import sanitize_report_markdown  # noqa: PLC0415
         st.markdown(sanitize_report_markdown(final_report), unsafe_allow_html=False)
         _render_citation_stats(state)
     else:

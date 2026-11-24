@@ -18,11 +18,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agents.reader import ReaderAgent
-from agents.synthesizer import SynthesizerAgent
-from agents.writer import WriterAgent
-from models import ResearchState
-from tools.web_search import search_web
+from research_analyst.agents.reader import ReaderAgent
+from research_analyst.agents.synthesizer import SynthesizerAgent
+from research_analyst.agents.writer import WriterAgent
+from research_analyst.models import ResearchState
+from research_analyst.retrieval.web_search import search_web
 
 
 async def main() -> None:

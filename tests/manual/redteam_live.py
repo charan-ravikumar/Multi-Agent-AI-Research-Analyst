@@ -15,8 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agents.reader import ReaderAgent  # noqa: E402
-from models.search_result import SearchResult  # noqa: E402
+from research_analyst.agents.reader import ReaderAgent  # noqa: E402
+from research_analyst.models.search_result import SearchResult  # noqa: E402
 
 CANARY = "ZEBRA-7731"
 PAYLOADS = [

@@ -16,8 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from agents.searcher import SearcherAgent
-from models import ResearchState
+from research_analyst.agents.searcher import SearcherAgent
+from research_analyst.models import ResearchState
 
 
 def _make_state(sub_question: str) -> ResearchState:

@@ -20,9 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import settings
-from agents.planner import PlannerAgent
-from models import ResearchState
+from research_analyst.config import settings
+from research_analyst.agents.planner import PlannerAgent
+from research_analyst.models import ResearchState
 
 
 def _make_state(query: str) -> ResearchState:

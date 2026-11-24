@@ -31,4 +31,4 @@ env/
 logs/
 
 # Scraped third-party page text: re-fetched on first run, cached locally, never committed.
-eval/fixtures/page_*.json
+src/research_analyst/evaluation/fixtures/page_*.json

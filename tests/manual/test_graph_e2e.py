@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from orchestrator.graph import app
-from models import ResearchState
+from research_analyst.pipeline.graph import app
+from research_analyst.models import ResearchState
 
 
 def make_initial_state(query: str) -> ResearchState:

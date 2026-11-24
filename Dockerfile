@@ -15,6 +15,7 @@ COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
+RUN uv sync --frozen --no-dev        # now install the project itself (src/research_analyst)
 
 # Run unprivileged; logs/ is the trace-log volume mount point.
 RUN useradd --create-home --uid 10001 app && mkdir -p /app/logs && chown -R app:app /app

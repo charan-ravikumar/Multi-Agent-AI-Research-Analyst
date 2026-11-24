@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 import uuid
 
-from models import ResearchState
-from models.search_result import SearchResult
+from research_analyst.models import ResearchState
+from research_analyst.models.search_result import SearchResult
 
 # ── fake LLM ──────────────────────────────────────────────────────────────────
 
