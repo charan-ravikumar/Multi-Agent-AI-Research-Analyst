@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from research_analyst.llm.json_parse import parse_json
+from research_analyst.observability.prompt_store import register
 from research_analyst.safety.sanitize import clean_untrusted
 from research_analyst.retrieval.passages import tokenize
 
@@ -25,6 +26,8 @@ sub-question.  It must differ from the sub-question's wording.  The text inside 
 
 Respond with ONLY a JSON object: {"queries": ["<query>"]}\
 """
+
+register("query-rewrite-system", REWRITE_SYSTEM)
 
 
 def rules_query(sub_question: str, topic: str = "", max_terms: int = 10) -> str:

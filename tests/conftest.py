@@ -70,6 +70,8 @@ def reset_llm_state():
     from research_analyst.observability.usage import tracker
     from research_analyst.llm import client
     tracing.reset_for_tests()
+    from research_analyst.observability import prompt_store
+    prompt_store.reset_for_tests()
     tracker.reset()
     from research_analyst.retrieval import arxiv as _ax
     _ax._cache.clear()

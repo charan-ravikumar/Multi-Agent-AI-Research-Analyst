@@ -62,6 +62,11 @@ def _get_client() -> Any:
     return _client
 
 
+def get_client() -> Any:
+    """The shared Langfuse client, or None when tracing is disabled/unavailable."""
+    return _get_client()
+
+
 def _truncate(value: Any) -> Any:
     if not settings.langfuse_capture_io:
         return None

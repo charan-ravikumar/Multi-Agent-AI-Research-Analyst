@@ -14,7 +14,8 @@ from research_analyst.retrieval.arxiv import relevant as arxiv_relevant
 from research_analyst.retrieval.arxiv import search_arxiv
 from research_analyst.retrieval.fetch import fetch_many
 from research_analyst.retrieval.passages import select_passages
-from research_analyst.retrieval.query import REWRITE_SYSTEM, parse_llm_queries, rewrite_user_prompt, rules_query
+from research_analyst.observability.prompt_store import resolve
+from research_analyst.retrieval.query import parse_llm_queries, rewrite_user_prompt, rules_query
 from research_analyst.retrieval.sources import rank_and_diversify, rrf_fuse
 from research_analyst.retrieval.web_search import search_web
 
@@ -145,7 +146,7 @@ class SearcherAgent(BaseAgent):
         if mode == "llm":
             try:
                 raw, _ = await self.llm_generate(
-                    [{"role": "system", "content": REWRITE_SYSTEM},
+                    [{"role": "system", "content": resolve("query-rewrite-system").text},
                      {"role": "user", "content": rewrite_user_prompt(sub_question, topic)}],
                     state=state,
                 )

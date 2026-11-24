@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.grounding.citations import analyze, build_evidence
 from research_analyst.grounding.gaps import curate_gaps, gap_texts
 from research_analyst.llm.json_parse import parse_json
@@ -74,7 +75,7 @@ class CriticAgent(BaseAgent):
         )
 
         messages: list[dict] = [
-            {"role": "system", "content": prompts.SYSTEM},
+            {"role": "system", "content": resolve("critic-system").text},
             {
                 "role": "user",
                 "content": prompts.USER.format(

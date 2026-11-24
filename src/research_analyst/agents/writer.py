@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.llm import ModelTier
 from research_analyst.grounding.gaps import COVERAGE, curate_gaps, gap_texts, make_item
 from research_analyst.observability.progress import progress
@@ -109,7 +110,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         )
 
         messages: list[dict] = [
-            {"role": "system", "content": prompts.SYSTEM},
+            {"role": "system", "content": resolve("writer-system").text},
             {"role": "user", "content": user_msg},
         ]
 

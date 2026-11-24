@@ -31,7 +31,7 @@ review loop) — not an autonomous agent swarm. Read [Limitations](#limitations)
 
 Around the pipeline: progress bar with live activity, **Stop** button, token/cost/time per run, coverage warnings
 (problems the system detected) separate from **suggested follow-up research** (one click starts a new run),
-Langfuse tracing with quality scores, a token budget, and a start-page check that a configured model still exists.
+Langfuse tracing with quality scores, **versioned prompts (Langfuse Prompt Management; the repo text is the fallback)**, a token budget, and a start-page check that a configured model still exists.
 
 ## Cost and speed (measured)
 

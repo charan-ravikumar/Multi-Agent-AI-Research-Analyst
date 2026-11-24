@@ -152,3 +152,9 @@ REVISION_RETRY = (
 SYNTH_FAIL_TEXT = "Synthesis could not be generated due to a formatting error."
 
 SYNTH_FAIL_PREFIX = "Synthesis generation failed"
+
+
+from research_analyst.observability.prompt_store import register  # noqa: E402
+
+register("synthesizer-system", SYSTEM)
+register("synthesizer-revision-system", REVISION_SYSTEM)

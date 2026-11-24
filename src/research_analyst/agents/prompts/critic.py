@@ -94,3 +94,8 @@ RETRY = (
     "Error: {error}\n\n"
     "Return ONLY the corrected JSON object with no other text."
 )
+
+
+from research_analyst.observability.prompt_store import register  # noqa: E402
+
+register("critic-system", SYSTEM)

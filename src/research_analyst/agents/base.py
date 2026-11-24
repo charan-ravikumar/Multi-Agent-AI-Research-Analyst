@@ -31,6 +31,7 @@ from collections.abc import Mapping
 from research_analyst import llm
 from research_analyst.observability import tracing
 from research_analyst.observability.logger import get_logger
+from research_analyst.observability import prompt_store
 from research_analyst.observability.usage import estimate_cost, tracker
 from research_analyst.llm import ModelTier
 
@@ -145,8 +146,10 @@ class BaseAgent(ABC):
         # in Langfuse can be tied to a prompt edit (shown as the generation's "version").
         sys_text = next((m["content"] for m in prompt if m.get("role") == "system"), "") if isinstance(prompt, list) else (system or "")
         prompt_version = hashlib.sha1(sys_text.encode("utf-8"), usedforsecurity=False).hexdigest()[:8] if sys_text else None
+        managed = prompt_store.lookup(sys_text) if sys_text else None      # Langfuse-managed prompt this text came from
+        link = {"prompt": managed.lf} if managed is not None and managed.lf is not None else {}
         with tracing.observation(
-            f"llm:{self.name}", as_type="generation", session_id=session_id, input=prompt, version=prompt_version,
+            f"llm:{self.name}", as_type="generation", session_id=session_id, input=prompt, version=prompt_version, **link,
             model_parameters={"json_mode": self.json_mode, "max_tokens": self.max_tokens or 0,
                               "tier": self.tier.value},
         ) as gen:
@@ -169,7 +172,10 @@ class BaseAgent(ABC):
                     "input": usage.get("prompt_tokens"), "output": usage.get("completion_tokens"),
                     "total": usage.get("total_tokens")}.items() if v is not None},
                 cost_details={"total": cost} if cost is not None else None,
-                metadata={"agent": self.name, "prompt_version": prompt_version, "provider": usage.get("provider"),
+                metadata={"agent": self.name, "prompt_version": prompt_version,
+                          "prompt_name": managed.name if managed else None,
+                          "prompt_source": managed.source if managed else None,
+                          "prompt_managed_version": managed.version if managed else None, "provider": usage.get("provider"),
                           "finish_reason": usage.get("finish_reason"),
                           "latency_s": usage.get("latency_s")},
             )

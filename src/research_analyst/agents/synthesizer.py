@@ -4,6 +4,7 @@ from typing import Any
 
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.config import settings
 from research_analyst.grounding.citations import (
     build_evidence,
@@ -147,7 +148,7 @@ class SynthesizerAgent(BaseAgent):
         )
 
         messages: list[dict] = [
-            {"role": "system", "content": prompts.REVISION_SYSTEM},
+            {"role": "system", "content": resolve("synthesizer-revision-system").text},
             {
                 "role": "user",
                 "content": prompts.REVISION_USER.format(
@@ -201,7 +202,7 @@ class SynthesizerAgent(BaseAgent):
             for i, f in enumerate(facts, 1)
         )
         messages: list[dict] = [
-            {"role": "system", "content": prompts.SYSTEM},
+            {"role": "system", "content": resolve("synthesizer-system").text},
             {
                 "role": "user",
                 "content": prompts.USER.format(
@@ -236,7 +237,7 @@ class SynthesizerAgent(BaseAgent):
         """Run LLM synthesis when no facts are available. Returns (synthesis, [], gaps)."""
         reasons = "\n".join(f"- {g}" for g in gap_seeds) if gap_seeds else "- Unknown"
         messages: list[dict] = [
-            {"role": "system", "content": prompts.SYSTEM},
+            {"role": "system", "content": resolve("synthesizer-system").text},
             {
                 "role": "user",
                 "content": prompts.EMPTY_USER.format(

@@ -169,6 +169,11 @@ class Settings(BaseSettings):
     def langfuse_url(self) -> str:
         return (self.langfuse_base_url or self.langfuse_host).rstrip("/")
     # Send prompts/completions to Langfuse (truncated).  Disable to send metadata + usage only.
+    # Prompt management: take SYSTEM prompts from Langfuse (label below) instead of the in-repo text.  Active only when
+    # tracing is enabled; any problem falls back to the in-repo prompt.  Push prompts with scripts/sync_prompts.py.
+    langfuse_prompts: bool = True
+    langfuse_prompt_label: str = "production"      # e.g. "staging" to evaluate a new version without touching production
+    langfuse_prompt_cache_seconds: int = 300
     langfuse_capture_io: bool = True
     langfuse_max_io_chars: int = 4000
 

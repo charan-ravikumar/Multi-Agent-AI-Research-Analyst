@@ -5,6 +5,7 @@ from typing import Any
 
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import clean_untrusted, safe_url
@@ -137,7 +138,7 @@ class ReaderAgent(BaseAgent):
         self, sources: list[SearchResult], sub_question: str, state: StateLike
     ) -> list[Fact]:
         messages: list[dict] = [
-            {"role": "system", "content": prompts.SYSTEM},
+            {"role": "system", "content": resolve("reader-system").text},
             {"role": "user", "content": prompts.USER.format(
                 sub_question=sub_question, sources_block=_sources_block(sources))},
         ]

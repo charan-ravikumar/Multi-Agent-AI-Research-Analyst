@@ -18,6 +18,7 @@ from typing import Any
 
 from research_analyst.grounding.verify import Claim, best_support
 from research_analyst.llm.json_parse import parse_json
+from research_analyst.observability.prompt_store import register
 from research_analyst.safety.sanitize import clean_untrusted
 
 VERDICTS = ("supported", "partial", "unsupported")
@@ -47,6 +48,8 @@ Respond with ONLY a JSON object:
                "supporting_refs": [<source numbers that back it>], "reason": "<short>"}]}
 Return exactly one entry per claim id given.\
 """
+
+register("grounding-judge-system", SYSTEM)
 
 RETRY = ("Your answer could not be used ({error}).  Reply with ONLY the JSON object "
          '{{"verdicts": [{{"id": <int>, "verdict": "supported|partial|unsupported", "supporting_refs": [<int>], "reason": "<short>"}}]}} '

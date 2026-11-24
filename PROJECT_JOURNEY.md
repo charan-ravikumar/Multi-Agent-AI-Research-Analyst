@@ -36,6 +36,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | Self-critique / reflection | Critic ⇄ Reviser (`agents/critic.py`, `nodes/debate.py`) | opt-in; measured not worth it by default |
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
+| Prompt versioning | `observability/prompt_store.py` (Langfuse) | on branch `feature/langfuse-prompt-management`, awaiting your confirmation |
 
 ## 3. Timeline
 
@@ -127,6 +128,34 @@ cheapest credibility win was a real A/B. Hence this work.
 #### C. Housekeeping
 - `README.md`, `docs/ARCHITECTURE.md`, `.env.example`, About tab updated to describe both features and their unmeasured status.
 - Nothing committed yet (working tree only).
+
+### 2026-11-24 — Feature branch `feature/langfuse-prompt-management`: Langfuse Prompt Management **(not yet merged to main)**
+
+**Context [DECIDED]:** you asked where prompt versioning could live; I recommended in-repo versioning first, you chose **Langfuse Prompt Management**. You also set the workflow: new features go on a branch and merge to `main` only after you confirm.
+
+**What was built**
+- `observability/prompt_store.py` — `register(name, text, formatted=)` declares each SYSTEM prompt in the repo (the fallback); `resolve(name)` returns the Langfuse text for `LANGFUSE_PROMPT_LABEL` (default `production`) with its version, or the repo text. 9 prompts managed: planner, reader, synthesizer (+ revision), critic, writer, query-rewrite, react-search, grounding-judge. USER templates stay in code.
+- `agents/base.py::llm_generate` — looks up which managed prompt a system message came from and passes the Langfuse prompt object to the generation, so each trace is **linked to the exact prompt version**; metadata records name/source/version. The old SHA-1 `version` tag is kept.
+- `observability/prompt_sync.py` + `scripts/sync_prompts.py` — pushes repo prompts as new Langfuse versions (`--label`, `--dry-run`, idempotent: identical text at that label is skipped).
+- `evaluation/run_eval.py` — result JSON now records `prompt_label` and `prompts_used` (so an eval is reproducible/attributable to prompt versions).
+- Settings: `LANGFUSE_PROMPTS` (kill switch), `LANGFUSE_PROMPT_LABEL`, `LANGFUSE_PROMPT_CACHE_SECONDS`. Tests: `tests/unit/test_prompt_store.py` (16 tests; suite 329 passing offline, ruff clean).
+
+**Technical decisions** (all **[INFERRED]** unless stated)
+
+| Decision | Why | Alternative & trade-off |
+|---|---|---|
+| Repo text is always the fallback; Langfuse is an *override* | App must work offline/in CI/with no keys; git stays reviewable | Langfuse as sole source = single source of truth but a hard runtime dependency |
+| Reject a remote prompt whose `.format` placeholders differ from the code's | A UI edit (e.g. renaming `{min_q}`) would otherwise crash every run with `KeyError` | Trust the UI = flexibility, outage risk |
+| After one Langfuse failure/miss, skip remote for 60 s | Avoid paying a 3 s timeout on every call when Langfuse is down/prompt absent | Per-call retry = fresher, slower |
+| Link generations via `prompt=` + keep hash tag | Langfuse then shows per-version latency/cost/scores; hash still works without Langfuse | — |
+| Only SYSTEM prompts managed | USER templates are coupled to code-supplied data; versioning them separately invites mismatches | Manage both = full UI control, more drift risk |
+| Label-based selection (`production`/`staging`) | Roll forward/back and A/B in eval by changing a label, no deploy | Pin integer versions = reproducible, less convenient |
+
+**Challenges:** circular imports (the react/judge modules import the store, so the store can't import them) → registration happens next to each prompt at import time and the sync script imports the modules; Langfuse text prompts use `{{var}}` while ours use Python `{var}` → we fetch the raw text and format ourselves, and validate placeholders.
+
+**Honest limits:** verified with a fake Langfuse client only — **not run against real Langfuse** (needs your keys). Open items: run `scripts/sync_prompts.py --dry-run` then real, confirm traces show linked prompt versions in the UI.
+
+**Interview questions this adds:** Why keep a local fallback? How do you stop a prompt edit in a UI from breaking production? How would you A/B two prompt versions and attribute the difference? What's the difference between tagging a trace with a prompt hash and linking it to a managed version? Where do prompts belong — code or a registry — and what are the trade-offs (review, rollback, drift, latency)?
 
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.

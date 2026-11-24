@@ -9,6 +9,7 @@ from research_analyst.config import settings
 from research_analyst.grounding import judge
 from research_analyst.grounding.verify import build_evidence_index, extract_claims
 from research_analyst.llm import ModelTier
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.observability.usage import BudgetExceeded
 
 
@@ -46,7 +47,7 @@ class GroundingJudgeAgent(BaseAgent):
         for i in range(0, len(claims), size):
             batch = claims[i:i + size]
             ids = [c.id for c in batch]
-            messages = [{"role": "system", "content": judge.SYSTEM},
+            messages = [{"role": "system", "content": resolve("grounding-judge-system").text},
                         {"role": "user", "content": judge.build_batch_prompt(batch, evidence)}]
             parse = functools.partial(judge.parse_verdicts, expected_ids=set(ids), valid_refs={c.id: c.refs for c in batch})
             try:

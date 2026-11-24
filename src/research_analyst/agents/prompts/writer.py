@@ -71,3 +71,8 @@ Issues found:
 Rewrite the complete report, ensuring every required section header is present and
 every contradiction and gap item is explicitly listed in the appropriate section.\
 """
+
+
+from research_analyst.observability.prompt_store import register  # noqa: E402
+
+register("writer-system", SYSTEM)

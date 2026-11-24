@@ -4,6 +4,7 @@ from typing import Any
 
 
 from research_analyst.agents.base import BaseAgent, StateLike
+from research_analyst.observability.prompt_store import resolve
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import validate_query
@@ -34,7 +35,7 @@ class PlannerAgent(BaseAgent):
         session_id: str = state["session_id"]
         iteration: int = state.get("iteration", 0)
 
-        system = prompts.SYSTEM.format(
+        system = resolve("planner-system").format(
             min_q=settings.planner_min_sub_questions,
             max_q=settings.planner_max_sub_questions,
         )
