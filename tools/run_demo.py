@@ -48,6 +48,7 @@ async def main() -> None:
         citations=[],
         contradictions=[],
         unresolved_gaps=[],
+        gap_items=[],
         draft=[],
         final_report="",
         iteration=0,

@@ -81,7 +81,7 @@ def test_llm_queries_are_validated():
 # ── arXiv ─────────────────────────────────────────────────────────────────────
 
 ATOM = """<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
-<entry><id>http://arxiv.org/abs/2401.00001v1</id><title>Quantum error correction  with
+<entry><id>http://arxiv.org/abs/2401.00001v1</id><published>2024-01-02T00:00:00Z</published><title>Quantum error correction  with
  surface codes</title><summary>We study quantum error correction thresholds for surface codes and scaling limits.</summary></entry>
 <entry><id>http://arxiv.org/abs/2401.00002v1</id><title>Cooking pasta</title><summary>Unrelated recipe paper.</summary></entry>
 <entry><id>http://evil.example/abs/1</id><title>Bad host</title><summary>should be skipped</summary></entry>
@@ -91,7 +91,7 @@ ATOM = """<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
 def test_arxiv_parse_and_relevance_gate():
     res = ax.parse_atom(ATOM, "What limits quantum error correction scaling?")
     assert [r.url for r in res] == ["https://arxiv.org/abs/2401.00001v1", "https://arxiv.org/abs/2401.00002v1"]
-    assert res[0].source_type == "arxiv" and "surface codes" in res[0].full_text and "\n" not in res[0].title
+    assert res[0].snippet.startswith("[2024] ") and res[0].source_type == "arxiv" and "surface codes" in res[0].full_text and "\n" not in res[0].title
     keep = [r for r in res if ax.relevant("What limits quantum error correction scaling?", r, 3)]
     assert [r.title for r in keep] == ["Quantum error correction with surface codes"]
 
@@ -123,7 +123,7 @@ def test_arxiv_requests_are_spaced(monkeypatch):
         import time
         await ax.search_arxiv("quantum error correction", client=c)
         t = time.monotonic()
-        await ax.search_arxiv("quantum error correction", client=c)
+        await ax.search_arxiv("superconducting qubit noise", client=c)       # different query: not a cache hit
         return time.monotonic() - t
 
     assert asyncio.run(two()) >= 0.15
@@ -232,3 +232,37 @@ def test_arxiv_429_triggers_cooldown_and_stops_calling(monkeypatch):
     assert asyncio.run(ax.search_arxiv("quantum error correction", client=c)) == []
     assert calls["n"] == 1                               # second call skipped during cooldown
     ax._cooldown_until = 0.0                             # do not leak into other tests
+
+
+def _paper(i, title, abstract, year):
+    return SearchResult(sub_question="q", url=f"https://arxiv.org/abs/{i}", title=title, snippet=f"[{year}] {abstract[:100]}",
+                        full_text=abstract, source_type="arxiv")
+
+
+def test_rerank_prefers_relevant_and_recent_over_arxiv_order():
+    sq = "What limits the scaling of quantum error correction in superconducting qubit systems?"
+    cands = [
+        _paper(1, "Error suppression in adiabatic quantum computation", "adiabatic annealing error suppression", 2013),
+        _paper(2, "Scaling quantum error correction on superconducting qubit arrays", "limits of scaling error correction in superconducting qubit devices", 2024),
+        _paper(3, "Cooking pasta", "pasta recipes", 2024),
+    ]
+    out = ax.rerank(cands, sq, keep=2, now_year=2026)
+    assert out[0].url.endswith("/2")                       # relevant AND recent beats arXiv's original order
+    assert len(out) == 2
+
+
+def test_arxiv_results_are_cached(monkeypatch):
+    monkeypatch.setattr(settings, "arxiv_min_interval_seconds", 0.0)
+    ax._cache.clear()
+    ax._cooldown_until = 0.0
+    n = {"n": 0}
+
+    def handler(req):
+        n["n"] += 1
+        return httpx.Response(200, text=ATOM)
+
+    c = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    a = asyncio.run(ax.search_arxiv("quantum error correction", sub_question="quantum error correction", client=c))
+    b = asyncio.run(ax.search_arxiv("quantum error correction", sub_question="quantum error correction", client=c))
+    assert n["n"] == 1 and [r.url for r in a] == [r.url for r in b]
+    ax._cache.clear()

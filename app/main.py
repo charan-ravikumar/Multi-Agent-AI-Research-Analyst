@@ -47,7 +47,10 @@ import uuid
 # ── third-party ────────────────────────────────────────────────────────────────
 import streamlit as st
 
+from app.about import ABOUT_MD, SAMPLE_QUESTIONS  # noqa: E402
 from app.secrets_env import export_secrets_to_env  # noqa: E402
+from core.gaps import curate_gaps  # noqa: E402
+from core.progress import progress  # noqa: E402
 
 # Streamlit Cloud secrets -> environment, BEFORE config.Settings is first imported (it is imported lazily
 # below).  Handles secrets pasted under a [section] header or in lower case.  Local runs have no
@@ -247,21 +250,52 @@ def _render_usage(state: dict) -> None:
                  "truncated_calls": u.get("truncated_calls"), "budget": u.get("budget") or "off"})
 
 
+def _start_followup(question: str) -> None:
+    """Button callback: start over with a follow-up question prefilled (the user still presses Start)."""
+    base = (st.session_state.get("query") or "").strip()
+    text = f"{base} — {question}" if base and question.lower() not in base.lower() else question
+    from config import settings  # noqa: PLC0415
+    _reset_state()
+    st.session_state["query_input"] = text[: settings.max_query_chars]
+
+
 def _render_gaps_and_contradictions(state: dict) -> None:
-    gaps    = _str_list(state.get("unresolved_gaps"))
+    """Coverage warnings (system-detected), follow-up research (model-suggested), contradictions."""
+    items = state.get("gap_items") or []
+    curated: dict = curate_gaps(items) if items else {"coverage": [], "open_questions": [], "dropped": 0}
     contras = _str_list(state.get("contradictions"))
-    if not gaps and not contras:
+    legacy = [] if items else _str_list(state.get("unresolved_gaps"))
+    if not (curated["coverage"] or curated["open_questions"] or contras or legacy):
         return
     st.divider()
-    left, right = st.columns(2)
-    with left:
-        if gaps:
-            st.subheader("⚠ Unresolved gaps")
-            for g in gaps:
-                st.warning(g)
-    with right:
-        if contras:
-            st.subheader("⚡ Contradictions flagged")
+
+    if curated["coverage"]:
+        st.subheader("⚠ Coverage warnings")
+        st.caption("Detected by the system while researching. They affect how far to trust the matching sections.")
+        for c in curated["coverage"]:
+            st.warning(c["text"])
+
+    if curated["open_questions"]:
+        st.subheader("🔎 Suggested follow-up research")
+        st.caption(
+            "Questions the gathered sources did not answer, suggested by the model "
+            "(unverified, deduplicated"
+            + (f"; {curated['dropped']} similar or lower-priority ones hidden" if curated["dropped"] else "")
+            + "). Click one to start a new research run on it."
+        )
+        for n, o in enumerate(curated["open_questions"]):
+            left, right = st.columns([6, 1])
+            left.markdown(f"**{o['text']}**  \n<span style='opacity:.6'>from: {o['sub_question'][:90]}</span>",
+                          unsafe_allow_html=True)
+            right.button("Research this", key=f"followup_{n}", on_click=_start_followup, args=(o["text"],))
+
+    if legacy:
+        with st.expander(f"Gaps noted ({len(legacy)})"):
+            for g in legacy:
+                st.write(f"- {g}")
+
+    if contras:
+        with st.expander(f"⚡ Contradictions between sources ({len(contras)})", expanded=True):
             for c in contras:
                 st.info(c)
 
@@ -310,6 +344,10 @@ def _render_routing_history(state: dict) -> None:
 
 # ── phase: idle ───────────────────────────────────────────────────────────────
 
+def _set_query(q: str) -> None:
+    st.session_state["query_input"] = q
+
+
 def _missing_provider_keys() -> list[str]:
     from config import settings  # noqa: PLC0415
     return [name for name, val in (("GROQ_API_KEY", settings.groq_api_key),
@@ -339,6 +377,11 @@ def _phase_idle() -> None:
         help="Measured on 3 test queries: more citation markers, no faithfulness gain, slightly lower "
              "completeness, ~75% more tokens. Off by default.",
     )
+    st.caption("Try an example:")
+    cols = st.columns(len(SAMPLE_QUESTIONS))
+    for n, (col, q) in enumerate(zip(cols, SAMPLE_QUESTIONS, strict=True)):
+        col.button(q.split("?")[0][:48] + "…", key=f"sample_{n}", help=q, use_container_width=True,
+                   on_click=_set_query, args=(q,))
     submitted = st.button(
         "Start research →",
         type="primary",
@@ -384,6 +427,7 @@ def _phase_planning() -> None:
             citations=[],
             contradictions=[],
             unresolved_gaps=[],
+            gap_items=[],
             draft=[],
             final_report="",
             iteration=0,
@@ -485,6 +529,7 @@ def _start_research(approved_sqs: list[str]) -> None:
     cfg           = {"configurable": {"thread_id": st.session_state.thread_id,
                                       "session_id": st.session_state.session_id}}
     result_holder = {"done": False}
+    progress.start(st.session_state.session_id, len(approved_sqs), st.session_state.get("review_rounds", 0))
     t = threading.Thread(
         target=_research_thread,
         args=(_get_graph(), cfg, approved_sqs, result_holder),
@@ -506,24 +551,27 @@ def _phase_researching() -> None:
     if not result_holder.get("done") and thread.is_alive():
         # ── show live progress ─────────────────────────────────────────────
         st.markdown(f"**Query:** {st.session_state.query}")
-        events = _read_trace_tail(st.session_state.session_id)
-        label  = _progress_label(events)
+        snap = progress.snapshot(st.session_state.session_id)
+        if snap:
+            pct = int(snap["fraction"] * 100)
+            st.progress(snap["fraction"], text=f"{pct}% — {snap['label']}")
+            mins, secs = divmod(int(snap["elapsed_s"]), 60)
+            st.caption(
+                f"{snap['branches_done']} of {snap['n_branches']} sub-questions researched · "
+                f"elapsed {mins}:{secs:02d} · typically 3–6 minutes · percentage is approximate"
+            )
+        else:
+            st.progress(0.0, text="Starting…")
 
-        with st.status(f"Researching… — {label}", expanded=True):
-            if events:
-                st.markdown("**Recent agent activity**")
-                for ev in reversed(events):  # newest at top
-                    lvl   = (ev.get("level") or "info").upper()
-                    agent = ev.get("agent") or ""
-                    step  = ev.get("step")  or ""
-                    msg   = ev.get("message") or ""
-                    icon  = "🔴" if lvl == "ERROR" else "🟡" if lvl == "WARNING" else "🟢"
-                    badge = f"`{agent}`" if agent else ""
-                    tag   = f"`{step}`"  if step  else ""
-                    line  = " ".join(p for p in (icon, badge, tag, msg[:120]) if p)
-                    st.write(line)
-            else:
-                st.write("Starting agents — first trace events will appear shortly…")
+        events = _read_trace_tail(st.session_state.session_id)
+        with st.expander("Technical activity log", expanded=False):
+            for ev in reversed(events):
+                lvl = (ev.get("level") or "info").upper()
+                icon = "🔴" if lvl == "ERROR" else "🟡" if lvl == "WARNING" else "🟢"
+                st.write(" ".join(p for p in (icon, f"`{ev.get('agent') or ''}`", f"`{ev.get('step') or ''}`",
+                                              (ev.get("message") or "")[:120]) if p))
+            if not events:
+                st.write("No events yet.")
 
         # Poll: wait then trigger next rerun
         time.sleep(POLL_INTERVAL)
@@ -539,6 +587,7 @@ def _phase_researching() -> None:
 
     st.session_state.final_state = result_holder.get("result", {})
     st.session_state.phase       = "done"
+    progress.finish(st.session_state.session_id)
     st.rerun()
 
 
@@ -650,23 +699,27 @@ _PHASE_DISPATCH = {
 
 def main() -> None:
     st.set_page_config(
-        page_title="Agentic Research Platform",
+        page_title="AI Research Analyst",
         page_icon="🔬",
         layout="wide",
     )
-    st.title("Agentic Research & Knowledge Intelligence")
+    st.title("🔬 AI Research Analyst")
+    st.caption("Ask a question — get a sourced report. Sub-questions, search, reading and writing run in parallel.")
 
     if "phase" not in st.session_state:
         st.session_state.phase = "idle"
 
-    handler = _PHASE_DISPATCH.get(st.session_state.phase)
-    if handler is None:
-        st.error(f"Unknown phase: {st.session_state.phase!r}")
-        _reset_state()
-        st.rerun()
-        return
-
-    handler()
+    tab_research, tab_about = st.tabs(["🔬 Research", "ℹ️ About this app"])
+    with tab_about:
+        st.markdown(ABOUT_MD)
+    with tab_research:
+        handler = _PHASE_DISPATCH.get(st.session_state.phase)
+        if handler is None:
+            st.error(f"Unknown phase: {st.session_state.phase!r}")
+            _reset_state()
+            st.rerun()
+            return
+        handler()
 
 
 if __name__ == "__main__":

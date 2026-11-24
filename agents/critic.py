@@ -5,6 +5,7 @@ from typing import List
 
 from agents.base import BaseAgent, StateLike
 from core.citations import analyze, build_evidence
+from core.gaps import curate_gaps, gap_texts
 from core.json_parse import parse_json
 from config import settings
 from llm import ModelTier
@@ -149,7 +150,8 @@ class CriticAgent(BaseAgent):
 
         draft_sections: List[str] = list(state.get("draft", []))
         contradictions: List[str] = list(state.get("contradictions", []))
-        unresolved_gaps: List[str] = list(state.get("unresolved_gaps", []))
+        gap_items = state.get("gap_items") or []
+        unresolved_gaps: List[str] = gap_texts(curate_gaps(gap_items)) if gap_items else list(state.get("unresolved_gaps", []))
         sub_questions: List[str] = list(state.get("sub_questions", []))
 
         prev: List[str] = list(state.get("previous_objections", []))

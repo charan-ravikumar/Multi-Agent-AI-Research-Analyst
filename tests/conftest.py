@@ -67,6 +67,10 @@ def reset_llm_state():
     from llm import client
     tracing.reset_for_tests()
     tracker.reset()
+    from tools import arxiv as _ax
+    _ax._cache.clear()
+    _ax._cooldown_until = 0.0
+    _ax._last_call = 0.0
     client._breaker.reset()
     client._tpm.reset()
 

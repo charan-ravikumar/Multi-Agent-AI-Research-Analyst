@@ -265,3 +265,29 @@ def test_production_default_is_review_loop_off():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                          env={k: v for k, v in __import__("os").environ.items() if k != "DEBATE_MAX_ROUNDS"}).stdout.strip()
     assert out == "0"
+
+
+def test_reader_tries_the_next_batch_when_the_first_yields_no_facts(run_graph, monkeypatch):
+    from config import settings
+    monkeypatch.setattr(settings, "reader_max_sources", 3)
+
+    def reader(prompt, n):
+        content = prompt[1]["content"]
+        # make_search urls end in /0../5: only the SECOND batch (sources /3../5) contains usable facts
+        if any(f"/{i}</url>" in content for i in (3, 4, 5)):
+            return json.dumps({"facts": [{"source": 1, "content": "A real fact.", "confidence": 0.9}]})
+        return json.dumps({"facts": []})
+
+    fake = FakeLLM(N, {"reader": reader})
+    res = run_graph(fake, make_search(6))
+    assert fake.calls["reader"] == 2 * N                       # one empty first pass + one fallback per branch
+    assert len(res["extracted_facts"]) == N
+    assert not any(g["kind"] == "coverage" and "No usable evidence" in g["text"] for g in res["gap_items"])
+
+
+def test_reader_does_not_retry_when_the_first_batch_works(run_graph, monkeypatch):
+    from config import settings
+    monkeypatch.setattr(settings, "reader_max_sources", 3)
+    fake = FakeLLM(N)
+    run_graph(fake, make_search(6))
+    assert fake.calls["reader"] == N

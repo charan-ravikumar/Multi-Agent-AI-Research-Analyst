@@ -50,6 +50,8 @@ from agents.synthesizer import SynthesizerAgent
 from agents.writer import WriterAgent
 from config import settings
 from core.logger import get_logger
+from core.gaps import COVERAGE, make_item
+from core.progress import progress
 from core.usage import BudgetExceeded, tracker
 from models import ResearchState
 
@@ -204,25 +206,28 @@ async def _process_sub_question(state: dict) -> dict:
     """
     sq = state.get("current_sub_question", "").strip()
     state = {**state, "current_sub_question": sq}
+    br = progress.branch(state.get("session_id", ""))
     try:
-        return await _process_sub_question_inner(state)
+        return await _process_sub_question_inner(state, br)
     except Exception as exc:  # noqa: BLE001 — isolate the branch; CancelledError is BaseException
         _branch_log.error(
             f"BRANCH_FAILED [{sq}]: {type(exc).__name__}: {exc}",
             step="branch_failed",
             session_id=state.get("session_id", ""),
         )
+        msg = (f'Research for sub-question "{sq}" failed and was skipped '
+               f"({type(exc).__name__}: {str(exc)[:160]})")
         return {
             "failed_sub_questions": [sq],
-            "unresolved_gaps": [
-                f'Research for sub-question "{sq}" failed and was skipped '
-                f"({type(exc).__name__}: {str(exc)[:160]})"
-            ],
+            "unresolved_gaps": [msg],
+            "gap_items": [make_item(sq, COVERAGE, msg)],
             "routing_history": [f"branch_failed | [{sq}] {type(exc).__name__}: {str(exc)[:160]}"],
         }
+    finally:
+        br.close()
 
 
-async def _process_sub_question_inner(state: dict) -> dict:
+async def _process_sub_question_inner(state: dict, br=None) -> dict:
     """
     Composite branch node: runs the full Searcher -> Reader -> Synthesizer
     pipeline for ONE sub-question in a single Python function.
@@ -251,6 +256,8 @@ async def _process_sub_question_inner(state: dict) -> dict:
 
     # ── 1. Search ─────────────────────────────────────────────────────────────
     search_out = await _searcher(state)
+    if br:
+        br.step(f"Searched sources for: {sq[:70]}")
     new_results = search_out.get("search_results", [])
     new_failed  = search_out.get("failed_sub_questions", [])
 
@@ -287,6 +294,8 @@ async def _process_sub_question_inner(state: dict) -> dict:
     }
     reader_out = await _reader(reader_input)
     new_facts  = reader_out.get("extracted_facts", [])
+    if br:
+        br.step(f"Read sources for: {sq[:70]}")
 
     # ── 4. Synthesize ─────────────────────────────────────────────────────────
     # Build synth input: reader_input + this branch's extracted facts.
@@ -295,6 +304,8 @@ async def _process_sub_question_inner(state: dict) -> dict:
         "extracted_facts": reader_input.get("extracted_facts", []) + new_facts,
     }
     synth_out = await _synthesizer(synth_input)
+    if br:
+        br.step(f"Wrote section: {sq[:70]}")
 
     elapsed = time.perf_counter() - t0
     ts_end = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -319,6 +330,7 @@ async def _process_sub_question_inner(state: dict) -> dict:
         "citations":            synth_out.get("citations", []),
         "contradictions":       synth_out.get("contradictions", []),
         "unresolved_gaps":      synth_out.get("unresolved_gaps", []),
+        "gap_items":            synth_out.get("gap_items", []),
         "draft":                synth_out.get("draft", []),
         "routing_history":      routing_entries,
     }
@@ -376,6 +388,15 @@ def _budget_stop(routing_entries, current_draft, session_id, round_num, reason) 
 
 
 async def _debate_loop_node(state: ResearchState) -> dict:
+    """Progress-aware wrapper: whatever way the loop exits, the review stage is complete."""
+    sid = state.get("session_id", "")
+    try:
+        return await _debate_loop_node_inner(state)
+    finally:
+        progress.finish_stage(sid, "review", "Writing the final report…")
+
+
+async def _debate_loop_node_inner(state: ResearchState) -> dict:
     """
     Bounded Critic <-> Synthesizer debate loop (max settings.debate_max_rounds).
 
@@ -427,6 +448,7 @@ async def _debate_loop_node(state: ResearchState) -> dict:
             "critic_objections": [],   # clear stale objections from prior round
             "previous_objections": prev_objections,
         }
+        progress.set_label(session_id_d, f"Reviewing the draft (round {round_num + 1})…")
         try:
             critic_out = await _critic(critic_state)
         except BudgetExceeded as exc:
@@ -445,6 +467,7 @@ async def _debate_loop_node(state: ResearchState) -> dict:
             session_id=session_id_d,
         )
 
+        progress.advance(session_id_d, "review", 1)
         # ── 1b. Critic output unparseable: the draft was NOT reviewed ────────────
         if critic_out.get("critic_review_skipped"):
             routing_entries.append(f"debate | round={round_num + 1} | REVIEW_SKIPPED (critic output unparseable)")
@@ -513,6 +536,7 @@ async def _debate_loop_node(state: ResearchState) -> dict:
             "draft": current_draft,
             "critic_objections": objections,
         }
+        progress.set_label(session_id_d, f"Revising the draft (round {round_num + 1})…")
         try:
             revision_out = await _synthesizer(revision_state)
         except BudgetExceeded as exc:
@@ -520,6 +544,7 @@ async def _debate_loop_node(state: ResearchState) -> dict:
         revised = revision_out.get("revised_draft", [])
         if revised:
             current_draft = revised
+        progress.advance(session_id_d, "review", 1)
         if revision_out.get("revision_failed"):
             routing_entries.append(
                 f"debate | round={round_num + 1} | REVISION_FAILED (kept previous draft)"

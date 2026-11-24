@@ -5,6 +5,8 @@ from typing import Any, List
 
 from agents.base import BaseAgent, StateLike
 from llm import ModelTier
+from core.gaps import curate_gaps, gap_texts
+from core.progress import progress
 from core.sanitize import sanitize_report_markdown
 from core.usage import tracker
 from core.citations import (
@@ -121,7 +123,10 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         sub_question = state.get("current_sub_question", state.get("query", ""))
 
         contradictions: List[str] = state.get("contradictions", [])
-        gaps: List[str] = state.get("unresolved_gaps", [])
+        # Curated gaps: every system-detected coverage problem + a short, deduplicated list of open questions
+        # (the raw per-sub-question LLM gap lists were repetitive noise).  Falls back to the flat list.
+        gap_items = state.get("gap_items") or []
+        gaps: List[str] = gap_texts(curate_gaps(gap_items)) if gap_items else list(state.get("unresolved_gaps", []))
         citations: List[Citation] = state.get("citations", [])
 
         # Prefer debate-revised draft if it exists; fall back to raw fan-in draft.
@@ -158,6 +163,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             iteration=iteration,
         )
 
+        progress.advance(session_id, "writing", 1, "Writing the final report…")
         user_msg = _build_user_message(
             query=state["query"],
             sub_question=sub_question,
@@ -211,6 +217,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             iteration=iteration,
         )
 
+        progress.advance(session_id, "writing", 1, "Checking citations…")
         # ── deterministic citation verification + references (code, not LLM) ──────
         body, removed = verify_numbered(_strip_llm_references(last_report.strip()), {r["n"] for r in refs})
         cited = cited_numbers(body)
@@ -228,6 +235,7 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
             session_id=session_id,
             iteration=iteration,
         )
+        progress.finish_stage(session_id, "writing", "Finishing up…")
         usage_summary = tracker.summary(session_id)
         self.log.info(
             f"run usage: {usage_summary['total_tokens']} tokens in {usage_summary['calls']} calls",

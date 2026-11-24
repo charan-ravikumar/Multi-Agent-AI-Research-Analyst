@@ -93,7 +93,7 @@ def initial_state(auto_approve: bool = True, query: str = "What is X?") -> Resea
     return ResearchState(
         session_id=str(uuid.uuid4()), query=query, research_plan=None, sub_questions=[],
         search_results=[], failed_sub_questions=[], extracted_facts=[], citations=[],
-        contradictions=[], unresolved_gaps=[], draft=[], final_report="", iteration=0,
+        contradictions=[], unresolved_gaps=[], gap_items=[], draft=[], final_report="", iteration=0,
         routing_history=[], auto_approve_plan=auto_approve,
     )
 

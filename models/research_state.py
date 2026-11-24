@@ -68,6 +68,9 @@ class ResearchState(TypedDict):
     # Knowledge gaps: facts don't fully answer the sub-question, plus any
     # failed_sub_questions promoted here so Critic/Writer see them explicitly.
     unresolved_gaps: Annotated[List[str], operator.add]
+    # Structured gaps: {"sub_question", "kind": "coverage" | "open_question", "text"} (see core/gaps.py).
+    # "coverage" = detected by the system; "open_question" = model-suggested follow-up research.
+    gap_items: Annotated[List[dict], operator.add]
 
     # ── debate loop control ───────────────────────────────────────────────────
     # Specific, addressable objections produced by CriticAgent each round.

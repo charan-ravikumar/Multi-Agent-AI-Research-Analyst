@@ -265,7 +265,7 @@ def collect_metrics(state: dict, judge: dict, wall_s: float) -> dict:
 def _initial_state(query: str) -> ResearchState:
     return ResearchState(
         session_id=str(uuid.uuid4()), query=query, research_plan=None, sub_questions=[], search_results=[],
-        failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[], unresolved_gaps=[],
+        failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[], unresolved_gaps=[], gap_items=[],
         draft=[], final_report="", iteration=0, routing_history=[], auto_approve_plan=True)
 
 

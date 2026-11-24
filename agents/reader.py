@@ -122,7 +122,8 @@ class ReaderAgent(BaseAgent):
         my_results: List[SearchResult] = [
             r for r in state["search_results"] if r.sub_question == sub_question
         ]
-        sources = _select_sources(my_results)
+        batches = _source_batches(my_results)
+        sources = batches[0] if batches else []
 
         self.log.info(
             f"extracting facts from {len(sources)}/{len(my_results)} source(s) for: {sub_question!r}",
@@ -141,9 +142,21 @@ class ReaderAgent(BaseAgent):
             return {**state, "extracted_facts": []}
 
         facts = await self._extract(sources, sub_question, state)
+        n_used = len(sources)
+        if not facts and len(batches) > 1:
+            # The first batch held nothing usable (e.g. off-topic pages): try the next-best sources once
+            # before declaring the sub-question uncovered.
+            self.log.info(
+                f"no facts from the first {n_used} source(s); trying the next {len(batches[1])}",
+                step="reader_next_batch",
+                session_id=session_id,
+                iteration=iteration,
+            )
+            facts = await self._extract(batches[1], sub_question, state)
+            n_used += len(batches[1])
 
         self.log.info(
-            f"extracted {len(facts)} fact(s) from {len(sources)} source(s)",
+            f"extracted {len(facts)} fact(s) from {n_used} source(s)",
             step="reader_done",
             session_id=session_id,
             iteration=iteration,
@@ -197,11 +210,12 @@ def _evidence_text(r: SearchResult) -> str:
     return text[: settings.evidence_chars_per_source]
 
 
-def _select_sources(results: List[SearchResult]) -> List[SearchResult]:
-    """Fetched pages first (richer evidence), then snippets; drop empty; cap count."""
+def _source_batches(results: List[SearchResult], max_batches: int = 2) -> List[List[SearchResult]]:
+    """Usable sources, fetched pages first (richer evidence), split into batches of ``reader_max_sources``."""
     usable = [r for r in results if _evidence_text(r)]
-    usable.sort(key=lambda r: 0 if r.full_text.strip() else 1)   # stable
-    return usable[: settings.reader_max_sources]
+    usable.sort(key=lambda r: 0 if r.full_text.strip() else 1)   # stable: keeps the Searcher's ranking
+    k = max(1, settings.reader_max_sources)
+    return [usable[i:i + k] for i in range(0, len(usable), k)][:max_batches]
 
 
 def _sources_block(sources: List[SearchResult]) -> str:
