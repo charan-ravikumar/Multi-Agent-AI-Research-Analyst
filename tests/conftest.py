@@ -57,7 +57,11 @@ def no_page_fetching(monkeypatch):
         return []
 
     monkeypatch.setattr("research_analyst.agents.searcher.fetch_many", _none)
+    async def _no_pdf(*a, **kw):
+        return None
+
     monkeypatch.setattr("research_analyst.agents.searcher.search_arxiv", _no_arxiv)
+    monkeypatch.setattr("research_analyst.agents.searcher.fetch_pdf_text", _no_pdf)
 
 
 @pytest.fixture(autouse=True)

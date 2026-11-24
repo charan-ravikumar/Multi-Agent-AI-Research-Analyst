@@ -266,3 +266,42 @@ def test_arxiv_results_are_cached(monkeypatch):
     b = asyncio.run(ax.search_arxiv("quantum error correction", sub_question="quantum error correction", client=c))
     assert n["n"] == 1 and [r.url for r in a] == [r.url for r in b]
     ax._cache.clear()
+
+
+def test_top_arxiv_papers_get_full_text_passages_instead_of_the_abstract(monkeypatch):
+    papers = [SearchResult(sub_question="x", url=f"https://arxiv.org/abs/2401.0000{i}v1", title=f"Solid-state battery commercial EV review {i}",
+                           snippet="[2025] abstract", full_text="abstract text", source_type="arxiv") for i in (1, 2, 3)]
+    fetched = []
+
+    async def pdf(url, **kw):
+        fetched.append(url)
+        return ("Boilerplate.\n\nSolid-state battery commercialisation depends on electrolyte interface stability and "
+                "manufacturing cost, which limit how close these cells are to commercial EV production.")
+
+    async def search(q, *, sub_question="", max_results=5):
+        return []
+
+    monkeypatch.setattr(settings, "arxiv_fulltext", True)
+    monkeypatch.setattr(settings, "arxiv_fulltext_top_n", 2)
+    monkeypatch.setattr("research_analyst.agents.searcher.fetch_pdf_text", pdf)
+    out = _run_searcher(monkeypatch, search, rewrite="off", arxiv_results=papers)
+    by_url = {r.url: r for r in out["search_results"]}
+    assert len(fetched) == 2                                              # only the top-N papers are downloaded
+    full = [r for r in by_url.values() if "interface stability" in r.full_text]
+    assert len(full) == 2 and sum(1 for r in by_url.values() if r.full_text == "abstract text") == 1
+
+
+def test_arxiv_full_text_failure_keeps_the_abstract(monkeypatch):
+    paper = SearchResult(sub_question="x", url="https://arxiv.org/abs/2401.00001v1", title="Solid-state battery commercial EV scaling",
+                         snippet="[2025] abstract", full_text="abstract text", source_type="arxiv")
+
+    async def no_pdf(url, **kw):
+        return None
+
+    async def search(q, *, sub_question="", max_results=5):
+        return []
+
+    monkeypatch.setattr(settings, "arxiv_fulltext", True)
+    monkeypatch.setattr("research_analyst.agents.searcher.fetch_pdf_text", no_pdf)
+    out = _run_searcher(monkeypatch, search, rewrite="off", arxiv_results=[paper])
+    assert out["search_results"][0].full_text == "abstract text"

@@ -160,3 +160,20 @@ def test_failed_branch_still_advances_progress(monkeypatch):
     progress.start(sid, N, 0)
     asyncio.run(app.ainvoke(st, config={"configurable": {"thread_id": sid}}))
     assert progress.snapshot(sid)["branches_done"] == N       # the failed branch still counts as finished
+
+
+def test_progress_cancel_and_frozen_elapsed(monkeypatch):
+    import time as _t
+    t = ProgressTracker()
+    t.start("s", 1)
+    t.cancel("s")
+    snap = t.snapshot("s")
+    assert snap["cancelled"] and snap["label"] == "Stopped by user"
+    e1 = snap["elapsed_s"]
+    _t.sleep(0.05)
+    assert t.snapshot("s")["elapsed_s"] == e1                    # frozen once stopped/finished
+    t.start("f", 1)
+    t.finish("f")
+    f1 = t.snapshot("f")["elapsed_s"]
+    _t.sleep(0.05)
+    assert t.snapshot("f")["elapsed_s"] == f1

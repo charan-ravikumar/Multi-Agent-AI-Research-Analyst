@@ -54,3 +54,42 @@ def test_build_evidence_is_keyed_and_capped():
     ev = cz.build_evidence([fact(A, "alpha fact"), fact(B, "beta fact")], max_chars=10_000)
     assert f"[S:{KA}]" in ev and "alpha fact" in ev
     assert "truncated" in cz.build_evidence([fact(A, "x" * 500), fact(B, "y" * 500)], max_chars=100)
+
+
+# ── citation bracket normalisation (a real run lost every citation to 【1】) ────────
+
+def test_fullwidth_and_browsing_style_brackets_become_ascii():
+    n = cz.normalize_citation_brackets
+    assert n("Fact one【1】 and two【2】【3】.") == "Fact one[1] and two[2][3]."
+    assert n("Fact〔4〕 and ［5］.") == "Fact[4] and [5]."
+    assert n("Fact【1†source】 and 【3†L5-L9】.") == "Fact[1] and [3]."
+
+
+def test_lists_and_ranges_expand_only_for_plausible_reference_numbers():
+    n = cz.normalize_citation_brackets
+    assert n("Claim [1, 2] and [3;4].", max_ref=5) == "Claim [1][2] and [3][4]."
+    assert n("Claim [2-4].", max_ref=5) == "Claim [2][3][4]."
+    assert n("Years [2020, 2021] stay.", max_ref=5) == "Years [2020, 2021] stay."          # not references
+    assert n("Huge range [1-90].", max_ref=100) == "Huge range [1-90]."                    # not a citation range
+
+
+def test_internal_markers_are_never_touched():
+    n = cz.normalize_citation_brackets
+    s = f"Claim [S:{KA}] and [F1, F2] and plain [text]."
+    assert n(s) == s
+
+
+def test_report_citation_stats_measure_the_final_text():
+    body = ("## Key Findings\n- Ceramic electrolytes conduct lithium ions at room temperature [1].\n"
+            "- An uncited but long enough sentence about manufacturing costs today.\n## Detailed Analysis\nShort [2].\n")
+    s = cz.report_citation_stats(body)
+    assert s == {"report_claim_sentences": 2, "report_cited": 1, "report_cited_ratio": 0.5}
+
+
+def test_report_citation_stats_ignore_the_disclosure_sections():
+    body = ("## Executive Summary\nSolid-state cells promise much higher energy density for vehicles [1].\n"
+            "## Key Findings\n- Ceramic electrolytes conduct lithium ions at room temperature today [1].\n"
+            "## Detailed Analysis\nAn uncited but sufficiently long sentence about costs and scaling.\n"
+            "## Contradictions and Conflicting Evidence\nSources disagree about the commercial timeline for 2027.\n"
+            "## Knowledge Gaps and Limitations\n- Open question: how will recycling work at scale for these cells?\n")
+    assert cz.report_citation_stats(body) == {"report_claim_sentences": 3, "report_cited": 2, "report_cited_ratio": 0.667}

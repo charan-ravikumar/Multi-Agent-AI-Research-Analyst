@@ -228,3 +228,38 @@ def test_model_override_selects_groq_model(monkeypatch):
     monkeypatch.setattr(c.groq_client, "generate", lambda m, *, model, **k: (seen.setdefault("m", model), ("{}", {}))[1])
     c._call_with_fallback(MSG, tier=c.ModelTier.STRONG, temperature=0.2, max_tokens=10, groq_model_override="qwen/x")
     assert seen["m"] == "qwen/x"
+
+
+def _bad_request(body):
+    return groq.BadRequestError("400", response=httpx.Response(400, request=REQ), body=body)
+
+
+class _FakeGroq:
+    def __init__(self, exc):
+        self.chat = type("C", (), {"completions": type("X", (), {"create": staticmethod(self._create)})()})()
+        self._exc = exc
+
+    def _create(self, **kw):
+        raise self._exc
+
+
+def _gen_with(monkeypatch, exc):
+    from research_analyst.llm import groq_client
+    monkeypatch.setattr(groq_client, "_get_client", lambda: _FakeGroq(exc))
+    return groq_client.generate([{"role": "user", "content": "x"}], model="m", json_mode=True)
+
+
+def test_json_validate_failed_returns_the_rejected_text_for_tolerant_parsing(monkeypatch):
+    from research_analyst.llm.json_parse import parse_json
+    bad = '{"synthesis": "line one\nline two", "gaps": []}'                 # literal newline: strict JSON rejects it
+    for body in ({"error": {"code": "json_validate_failed", "failed_generation": bad}},
+                 {"code": "json_validate_failed", "failed_generation": bad}):         # both SDK body shapes
+        text, usage = _gen_with(monkeypatch, _bad_request(body))
+        assert text == bad and usage["finish_reason"] == "json_validate_failed" and usage["provider"] == "groq"
+        assert parse_json(text)["synthesis"] == "line one\nline two"                  # the tolerant parser repairs it
+
+
+def test_other_bad_requests_still_raise(monkeypatch):
+    for body in ({"error": {"code": "invalid_model", "message": "nope"}}, {"error": {"code": "json_validate_failed"}}, None):
+        with pytest.raises(groq.BadRequestError):
+            _gen_with(monkeypatch, _bad_request(body))

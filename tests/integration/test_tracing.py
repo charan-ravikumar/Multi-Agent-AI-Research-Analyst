@@ -138,3 +138,46 @@ def test_base_url_takes_precedence_over_host(monkeypatch):
     assert settings.langfuse_url == "https://cloud.langfuse.com"
     monkeypatch.setattr(settings, "langfuse_base_url", "https://us.cloud.langfuse.com/")
     assert settings.langfuse_url == "https://us.cloud.langfuse.com"
+
+
+def test_run_scores_extracts_quality_and_cost_metrics():
+    state = {"final_report": "one two three", "routing_history": ["branch_failed | x", "ok"], "debate_forced": True,
+             "citation_stats": {"cited_ratio": 0.8, "uncited": 2, "weakly_supported": 1, "sources_cited": 5},
+             "usage_summary": {"total_tokens": 1000, "calls": 7, "estimated_cost_usd": 0.01},
+             "gap_items": [{"kind": "coverage"}, {"kind": "open_question"}, {"kind": "open_question"}]}
+    s = tracing.run_scores(state)
+    assert s["cited_ratio"] == 0.8 and s["total_tokens"] == 1000 and s["llm_calls"] == 7 and s["estimated_cost_usd"] == 0.01
+    assert s["branch_failures"] == 1 and s["coverage_warnings"] == 1 and s["open_questions"] == 2
+    assert s["review_loop_forced"] == 1.0 and s["report_words"] == 3
+
+
+def test_record_scores_pushes_numeric_scores_to_the_current_trace(fake_lf):
+    scores = []
+    fake_lf.create_score = lambda **kw: scores.append(kw)
+    fake_lf.get_current_trace_id = lambda: "trace-123"
+    tracing.record_scores({"final_report": "a b", "citation_stats": {"cited_ratio": 0.5}})
+    names = {s["name"] for s in scores}
+    assert {"cited_ratio", "report_words"} <= names
+    assert all(s["trace_id"] == "trace-123" and s["data_type"] == "NUMERIC" for s in scores)
+
+
+def test_record_scores_is_silent_when_disabled_or_broken(fake_lf):
+    tracing.reset_for_tests()
+    tracing.record_scores({"final_report": "x"})                 # disabled: no client, no error
+    tracing._client, tracing._init_done = fake_lf, True
+    fake_lf.create_score = lambda **kw: (_ for _ in ()).throw(RuntimeError("boom"))
+    fake_lf.get_current_trace_id = lambda: "t"
+    tracing.record_scores({"final_report": "x"})                 # a scoring failure never propagates
+
+
+def test_run_span_tags_and_prompt_versions(fake_lf, run_graph):
+    from tests.helpers import FakeLLM, make_search
+    with tracing.run_span("research", "sess-t", "q", tags=["review:off"]):
+        pass
+    obs = fake_lf.observations[0]
+    assert obs[0] == "run:research"
+    run_graph(FakeLLM(4), make_search(2))
+    gens = [kw for n, t, kw, o in fake_lf.observations if t == "generation"]
+    versions = {kw.get("version") for kw in gens}
+    assert None not in versions and all(len(v) == 8 for v in versions)
+    assert len(versions) >= 4                                    # planner/reader/synth/writer prompts differ

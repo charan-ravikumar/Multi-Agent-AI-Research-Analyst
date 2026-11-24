@@ -269,7 +269,7 @@ def test_production_default_is_review_loop_off():
 
 def test_reader_tries_the_next_batch_when_the_first_yields_no_facts(run_graph, monkeypatch):
     from research_analyst.config import settings
-    monkeypatch.setattr(settings, "reader_max_sources", 3)
+    monkeypatch.setattr(settings, "reader_batch_size", 3)
 
     def reader(prompt, n):
         content = prompt[1]["content"]
@@ -287,7 +287,136 @@ def test_reader_tries_the_next_batch_when_the_first_yields_no_facts(run_graph, m
 
 def test_reader_does_not_retry_when_the_first_batch_works(run_graph, monkeypatch):
     from research_analyst.config import settings
-    monkeypatch.setattr(settings, "reader_max_sources", 3)
+    monkeypatch.setattr(settings, "reader_batch_size", 3)
+    monkeypatch.setattr(settings, "reader_target_facts", 1)       # one fact is enough -> never needs the second batch
     fake = FakeLLM(N)
     run_graph(fake, make_search(6))
     assert fake.calls["reader"] == N
+
+
+# ── early-stop reading ────────────────────────────────────────────────────────
+
+def _facts(*contents):
+    return json.dumps({"facts": [{"source": 1, "content": c, "confidence": 0.9} for c in contents]})
+
+
+def _batch_reader(by_batch):
+    """Reader double: answers depend on which batch of sources (URLs end /0../5) is in the prompt."""
+    def reader(prompt, n):
+        content = prompt[1]["content"]
+        for marker, answer in by_batch.items():
+            if f"/{marker}</url>" in content:
+                return answer
+        return _facts()
+    return reader
+
+
+def _read_notes(res):
+    return [r for r in res["routing_history"] if r.startswith("branch |")]
+
+
+def test_reading_stops_as_soon_as_enough_distinct_facts_exist(run_graph, monkeypatch):
+    from research_analyst.config import settings
+    monkeypatch.setattr(settings, "reader_batch_size", 2)
+    monkeypatch.setattr(settings, "reader_target_facts", 3)
+    fake = FakeLLM(N, {"reader": _batch_reader({0: _facts("Alpha reactors cool quickly.", "Beta pumps fail often.", "Gamma seals leak under load.")})})
+    res = run_graph(fake, make_search(6))
+    assert fake.calls["reader"] == N                                  # 1 call per sub-question, not 3
+    assert all("stop=enough_facts" in n and "read=2/6src in 1 call" in n for n in _read_notes(res))
+
+
+def test_reading_stops_when_a_later_batch_adds_nothing_new(run_graph, monkeypatch):
+    from research_analyst.config import settings
+    monkeypatch.setattr(settings, "reader_batch_size", 2)
+    monkeypatch.setattr(settings, "reader_target_facts", 10)
+    monkeypatch.setattr(settings, "reader_min_new_facts", 2)
+    reader = _batch_reader({
+        0: _facts("Alpha reactors cool quickly.", "Beta pumps fail often."),
+        2: _facts("Alpha reactors cool quickly."),                      # a restatement: not new
+        4: _facts("Delta valves corrode slowly."),                      # would be new, but we must not reach it
+    })
+    fake = FakeLLM(N, {"reader": reader})
+    res = run_graph(fake, make_search(6))
+    assert fake.calls["reader"] == 2 * N                              # batch 1 + batch 2, never batch 3
+    assert all("stop=saturated" in n for n in _read_notes(res))
+    assert all(sum(1 for f in res["extracted_facts"] if f.sub_question == sq) == 2 for sq in res["sub_questions"])
+
+
+def test_reading_continues_while_new_facts_keep_arriving(run_graph, monkeypatch):
+    from research_analyst.config import settings
+    monkeypatch.setattr(settings, "reader_batch_size", 2)
+    monkeypatch.setattr(settings, "reader_target_facts", 10)
+    reader = _batch_reader({0: _facts("Alpha reactors cool quickly."), 2: _facts("Beta pumps fail often.", "Gamma seals leak."),
+                            4: _facts("Delta valves corrode slowly.", "Epsilon sensors drift daily.")})
+    fake = FakeLLM(N, {"reader": reader})
+    res = run_graph(fake, make_search(6))
+    assert fake.calls["reader"] == 3 * N and all("stop=no_more_sources" in n and "in 3 call(s)" in n for n in _read_notes(res))
+    assert len(res["extracted_facts"]) == 5 * N
+
+
+def test_novel_facts_ignores_restatements_but_keeps_distinct_ones():
+    from research_analyst.agents.reader import novel_facts
+    from research_analyst.models.fact import Fact
+
+    def f(c):
+        return Fact(sub_question="q", content=c, source_url="https://a", source_title="t", confidence=0.9)
+
+    existing = [f("Solid state batteries use a ceramic electrolyte.")]
+    new = [f("Solid-state batteries use a ceramic electrolyte."), f("Charging speed doubles at high temperature."),
+           f("Charging speed doubles at high temperature!")]
+    out = novel_facts(new, existing)
+    assert [x.content for x in out] == ["Charging speed doubles at high temperature."]
+
+
+# ── Writer citation robustness (live bug: gpt-oss wrote 【1】 and every citation vanished) ──────────
+
+def _writer_with(marker_style):
+    def writer(prompt, n):
+        body = {"ascii": "[1]", "fullwidth": "【1】", "dagger": "【1†source】", "list": "[1, 1]", "none": ""}[marker_style]
+        return (f"## Executive Summary\nMachine learning shortens early drug screening cycles considerably {body}.\n"
+                f"## Key Findings\n- Faster screening for many teams {body}\\n## Detailed Analysis\nMore detail follows here {body}.\n"
+                "## Contradictions and Conflicting Evidence\nNone.\n## Knowledge Gaps and Limitations\n- limits").replace("\\n", "\n")
+    return writer
+
+
+def _cited_graph(run_graph, writer):
+    fake = FakeLLM(N, {"reader": _reader_facts, "synth": _cited_synth, "writer": writer})
+    return fake, run_graph(fake, make_search(2))
+
+
+def test_fullwidth_and_dagger_citations_survive_into_the_reference_list(run_graph):
+    for style in ("fullwidth", "dagger", "list"):
+        fake, res = _cited_graph(run_graph, _writer_with(style))
+        assert "【" not in res["final_report"] and "[1]" in res["final_report"], style
+        assert res["references"] and "https://example.com/" in res["final_report"].split("## References")[-1], style
+        assert fake.calls["writer"] == 1                                       # normalised, so no retry needed
+        assert res["citation_stats"]["report_cited"] >= 1
+
+
+def test_a_report_that_dropped_every_marker_is_retried_once_with_an_explicit_message(run_graph):
+    calls = {"n": 0}
+    good, bad = _writer_with("ascii"), _writer_with("none")
+
+    def writer(prompt, n):
+        calls["n"] += 1
+        return bad(prompt, n) if n == 1 else good(prompt, n)
+
+    fake, res = _cited_graph(run_graph, writer)
+    assert fake.calls["writer"] == 2 and res["references"]
+    retry_msg = [p for r, p in fake.prompts if r == "writer"][1][-1]["content"]
+    assert "No [n] citation markers found" in retry_msg
+
+
+def test_if_the_retry_also_drops_citations_a_coverage_warning_is_added(run_graph):
+    fake, res = _cited_graph(run_graph, _writer_with("none"))
+    assert fake.calls["writer"] == 2 and not res["references"]
+    assert any(g["kind"] == "coverage" and "no source citations" in g["text"] for g in res["gap_items"])
+    assert "No claim in this report carries a source citation" in res["final_report"]
+
+
+def test_writer_prompt_forbids_unsourced_elaboration_and_requires_markers(run_graph):
+    fake = FakeLLM(N)
+    run_graph(fake, make_search(2))
+    system = [p for r, p in fake.prompts if r == "writer"][0][0]["content"]
+    assert "ONLY facts that are in the draft" in system and "[n] marker" in system
+    assert "exhaustive" not in system and "elaborate breakdown" not in system         # the old instruction to pad

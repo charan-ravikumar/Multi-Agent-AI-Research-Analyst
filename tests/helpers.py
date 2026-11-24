@@ -98,3 +98,37 @@ def initial_state(auto_approve: bool = True, query: str = "What is X?") -> Resea
     )
 
 
+
+
+def make_pdf(pages: list[str]) -> bytes:
+    """A minimal but valid text PDF (Helvetica, one line of text per page) for extraction tests."""
+    objs: list[bytes] = []
+
+    def add(body: str) -> int:
+        objs.append(body.encode("latin-1"))
+        return len(objs)
+
+    add("<< /Type /Catalog /Pages 2 0 R >>")                                   # 1
+    kids_placeholder = len(objs) + 1
+    add("")                                                                     # 2 (filled below)
+    add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")               # 3
+    page_ids = []
+    for text in pages:
+        escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        stream = f"BT /F1 12 Tf 72 720 Td ({escaped}) Tj ET"
+        content_id = len(objs) + 2
+        page_ids.append(add(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {content_id} 0 R "
+                            f"/Resources << /Font << /F1 3 0 R >> >> >>"))
+        add(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+    objs[kids_placeholder - 1] = (f"<< /Type /Pages /Kids [{' '.join(f'{i} 0 R' for i in page_ids)}] /Count {len(page_ids)} >>").encode("latin-1")
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
