@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Any, Iterable, Sequence
+from typing import Any
+from collections.abc import Iterable, Sequence
 
 from research_analyst.safety.sanitize import clean_untrusted
 from research_analyst.retrieval.passages import tokenize
@@ -32,7 +33,7 @@ _MIN_SHARED_TOKENS = 2
 
 
 def source_key(url: str) -> str:
-    return hashlib.sha1(url.strip().encode("utf-8")).hexdigest()[:6]
+    return hashlib.sha1(url.strip().encode("utf-8"), usedforsecurity=False).hexdigest()[:6]
 
 
 def marker(url: str) -> str:

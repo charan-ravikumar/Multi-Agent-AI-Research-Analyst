@@ -92,9 +92,8 @@ def test_io_is_truncated(fake_lf, monkeypatch):
 
 
 def test_exception_is_recorded_and_reraised(fake_lf):
-    with pytest.raises(ValueError):
-        with tracing.observation("boom"):
-            raise ValueError("bad")
+    with pytest.raises(ValueError), tracing.observation("boom"):
+        raise ValueError("bad")
     upd = fake_lf.observations[0][3].updates[-1]
     assert upd["level"] == "ERROR" and "ValueError" in upd["status_message"]
 

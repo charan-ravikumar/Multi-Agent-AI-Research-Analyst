@@ -17,7 +17,6 @@ Field mapping (DDGS -> SearchResult):
 from __future__ import annotations
 
 import asyncio
-from typing import List
 
 from ddgs.exceptions import (
     DDGSException,
@@ -50,7 +49,7 @@ async def search_web(
     *,
     sub_question: str = "",
     max_results: int = 5,
-) -> List[SearchResult]:
+) -> list[SearchResult]:
     """
     Async web search using DuckDuckGo.
 

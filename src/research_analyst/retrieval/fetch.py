@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
-from typing import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from urllib.parse import urljoin, urlparse
 
 import httpx

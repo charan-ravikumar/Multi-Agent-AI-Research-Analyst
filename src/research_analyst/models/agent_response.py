@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -33,5 +33,5 @@ class AgentResponse(BaseModel):
     step: str
     session_id: str
     iteration: int = 0
-    latency_s: Optional[float] = None
-    tokens: Optional[Dict[str, Any]] = None   # provider-agnostic usage dict
+    latency_s: float | None = None
+    tokens: dict[str, Any] | None = None   # provider-agnostic usage dict

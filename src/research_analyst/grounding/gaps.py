@@ -14,7 +14,7 @@ that covers each sub-question fairly (round-robin).
 """
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from research_analyst.retrieval.passages import tokenize
 

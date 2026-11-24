@@ -13,8 +13,7 @@ from research_analyst.safety.sanitize import clean_untrusted
 from research_analyst.retrieval.passages import tokenize
 
 _QUESTION_WORDS = frozenset(
-    "what which who whom whose when where why how does do did is are was were can could should would "
-    "will role roles main key current state progress ways way aspects aspect".split()
+    ["what", "which", "who", "whom", "whose", "when", "where", "why", "how", "does", "do", "did", "is", "are", "was", "were", "can", "could", "should", "would", "will", "role", "roles", "main", "key", "current", "state", "progress", "ways", "way", "aspects", "aspect"]
 )
 
 REWRITE_SYSTEM = """\

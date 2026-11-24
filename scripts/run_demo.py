@@ -11,6 +11,8 @@ to 1 so the parallel Reader branches stay within Groq's free-tier 6,000 TPM limi
 """
 from __future__ import annotations
 
+from typing import Any
+
 import asyncio
 import os
 import sys
@@ -26,6 +28,11 @@ sys.path.insert(0, str(ROOT / "src"))   # allow running without installing the p
 
 from research_analyst.pipeline.graph import app
 from research_analyst.models import ResearchState
+
+
+def _save_state(path: Path, text: str) -> int:
+    path.write_text(text, encoding="utf-8")
+    return path.stat().st_size // 1024
 
 
 async def main() -> None:
@@ -71,7 +78,7 @@ async def main() -> None:
     state_path = _Path("logs/last_state.json")
     state_path.parent.mkdir(exist_ok=True)
 
-    def _serialise(obj):
+    def _serialise(obj: Any) -> Any:
         """Recursively serialise Pydantic models and other non-JSON types."""
         if hasattr(obj, "model_dump"):
             return obj.model_dump()
@@ -82,8 +89,8 @@ async def main() -> None:
         return obj
 
     state_json = {k: _serialise(v) for k, v in result.items()}
-    state_path.write_text(_json.dumps(state_json, indent=2, default=str), encoding="utf-8")
-    print(f"\nState saved → {state_path}  ({state_path.stat().st_size // 1024} KB)")
+    saved_kb = await asyncio.to_thread(_save_state, state_path, _json.dumps(state_json, indent=2, default=str))
+    print(f"\nState saved → {state_path}  ({saved_kb} KB)")
     # ─────────────────────────────────────────────────────────────────────────
 
     routing = result.get("routing_history", [])

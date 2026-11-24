@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import List
 
 from groq import Groq
 
@@ -30,7 +29,7 @@ def _get_client() -> Groq:
 
 
 def generate(
-    messages: List[dict],
+    messages: list[dict],
     *,
     model: str = GROQ_STRONG_MODEL,
     temperature: float = 0.2,

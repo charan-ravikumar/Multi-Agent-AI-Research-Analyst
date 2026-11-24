@@ -11,9 +11,7 @@ from collections import Counter
 
 _TOKEN = re.compile(r"[a-z0-9]{3,}")
 _STOP = frozenset(
-    "the and for are was were has have had its this that these those with from into over than then "
-    "what how why when where which who does did been being will would could should may might can but not "
-    "all any about also more most some such their there they them your you our out use used using".split()
+    ["the", "and", "for", "are", "was", "were", "has", "have", "had", "its", "this", "that", "these", "those", "with", "from", "into", "over", "than", "then", "what", "how", "why", "when", "where", "which", "who", "does", "did", "been", "being", "will", "would", "could", "should", "may", "might", "can", "but", "not", "all", "any", "about", "also", "more", "most", "some", "such", "their", "there", "they", "them", "your", "you", "our", "out", "use", "used", "using"]
 )
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
 

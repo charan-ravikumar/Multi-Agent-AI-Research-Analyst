@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET  # arXiv responses are untrusted input
 from datetime import datetime
 
 import httpx

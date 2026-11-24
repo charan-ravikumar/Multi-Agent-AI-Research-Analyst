@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, List
+from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.llm import ModelTier
@@ -13,6 +13,7 @@ from research_analyst.grounding.citations import (
     analyze, cited_numbers, number_citations, render_references, verify_numbered,
 )
 from research_analyst.models.citation import Citation
+from research_analyst.agents.prompts import writer as prompts
 
 # ── section headers the report MUST contain (case-insensitive match) ──────────
 _REQUIRED_HEADERS = [
@@ -24,73 +25,6 @@ _REQUIRED_HEADERS = [
 ]   # "## References" is appended by code from the verified citation list
 
 # ── prompts ───────────────────────────────────────────────────────────────────
-
-_SYSTEM = """\
-You are a research writer producing a structured analytical report in Markdown.
-
-The report MUST contain exactly these five sections in order, with these exact
-level-2 headers (## Header Name):
-
-1. ## Executive Summary
-2. ## Key Findings
-3. ## Detailed Analysis
-4. ## Contradictions and Conflicting Evidence
-5. ## Knowledge Gaps and Limitations
-
-Section requirements:
-- **Executive Summary**: 2-3 sentences capturing the core answer to the research question.
-- **Key Findings**: bullet-point list of the most important facts.
-- **Detailed Analysis**: a comprehensive, multi-paragraph, flowing analysis based on the
-  provided draft synthesis. You must expand on each point, detail the mechanisms or nuances,
-  provide contextual details, and aim to write an exhaustive, elaborate breakdown of the findings.
-- **Contradictions and Conflicting Evidence**: list every contradiction provided
-  explicitly. If none were identified, write exactly: "No contradictions were
-  identified across sources."
-- **Knowledge Gaps and Limitations**: list every gap provided explicitly. If none,
-  write: "No significant gaps were identified."
-
-CRITICAL (Section 5.9 compliance): every item supplied in the contradictions and
-gaps lists must appear in the corresponding sections. Omitting or paraphrasing
-them into invisibility is not acceptable.
-
-CITATIONS: the draft synthesis marks claims with numeric citation markers like [1] or
-[2][4].  Keep these markers attached to the claims they support (in Key Findings and
-Detailed Analysis).  NEVER invent a marker number, never cite a source that is not in
-the numbered source list, and do NOT write a References section — it is appended
-automatically from the sources you actually cited.
-
-Write in clear, professional prose. Do not wrap the output in code fences.\
-"""
-
-_USER = """\
-Research question: {query}
-
-Sub-question addressed: {sub_question}
-
-Draft synthesis:
-{draft}
-
-Contradictions between sources ({n_contra}):
-{contra_block}
-
-Knowledge gaps ({n_gaps}):
-{gaps_block}
-
-Numbered sources (for context only — do not reproduce them):
-{citations_block}
-
-Write the full research report now.\
-"""
-
-_RETRY = """\
-Your previous report was missing required sections or disclosures.
-
-Issues found:
-{issues}
-
-Rewrite the complete report, ensuring every required section header is present and
-every contradiction and gap item is explicitly listed in the appropriate section.\
-"""
 
 
 class WriterAgent(BaseAgent):
@@ -122,12 +56,12 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         iteration = state.get("iteration", 0)
         sub_question = state.get("current_sub_question", state.get("query", ""))
 
-        contradictions: List[str] = state.get("contradictions", [])
+        contradictions: list[str] = state.get("contradictions", [])
         # Curated gaps: every system-detected coverage problem + a short, deduplicated list of open questions
         # (the raw per-sub-question LLM gap lists were repetitive noise).  Falls back to the flat list.
         gap_items = state.get("gap_items") or []
-        gaps: List[str] = gap_texts(curate_gaps(gap_items)) if gap_items else list(state.get("unresolved_gaps", []))
-        citations: List[Citation] = state.get("citations", [])
+        gaps: list[str] = gap_texts(curate_gaps(gap_items)) if gap_items else list(state.get("unresolved_gaps", []))
+        citations: list[Citation] = state.get("citations", [])
 
         # Prefer debate-revised draft if it exists; fall back to raw fan-in draft.
         sections = state.get("revised_draft") or state.get("draft", [])
@@ -138,14 +72,14 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
 
         # Append forced-resolution disclosure to gaps so the report discloses it.
         debate_forced: bool = state.get("debate_forced", False)
-        forced_objections: List[str] = state.get("critic_objections", [])
+        forced_objections: list[str] = state.get("critic_objections", [])
         if debate_forced and forced_objections:
             gaps = list(gaps) + [
                 "REVIEW NOTE: The critic-synthesizer debate was terminated by the"
                 f" round cap with {len(forced_objections)} unresolved issue(s):"
             ] + [f"  - {obj}" for obj in forced_objections]
 
-        review_notes: List[str] = state.get("review_notes", [])
+        review_notes: list[str] = state.get("review_notes", [])
         if review_notes:
             gaps = list(gaps) + ["REVIEWER NOTES (minor, not blocking):"] + [f"  - {n}" for n in review_notes[:6]]
 
@@ -174,19 +108,19 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
         )
 
         messages: list[dict] = [
-            {"role": "system", "content": _SYSTEM},
+            {"role": "system", "content": prompts.SYSTEM},
             {"role": "user", "content": user_msg},
         ]
 
         last_report = ""
-        last_issues: List[str] = []
+        last_issues: list[str] = []
 
         for attempt in range(1, 3):
             if attempt == 2:
                 messages.append({"role": "assistant", "content": last_report})
                 messages.append({
                     "role": "user",
-                    "content": _RETRY.format(issues="\n".join(f"- {i}" for i in last_issues)),
+                    "content": prompts.RETRY.format(issues="\n".join(f"- {i}" for i in last_issues)),
                 })
 
             last_report, _usage = await self.llm_generate(messages, state=state)
@@ -255,9 +189,9 @@ def _build_user_message(
     query: str,
     sub_question: str,
     draft: str,
-    contradictions: List[str],
-    gaps: List[str],
-    refs: List[dict],
+    contradictions: list[str],
+    gaps: list[str],
+    refs: list[dict],
 ) -> str:
     contra_block = (
         "\n".join(f"- {c}" for c in contradictions)
@@ -271,7 +205,7 @@ def _build_user_message(
         "\n".join(f"[{r['n']}] {r['title']}" for r in refs) if refs else "(none)"
     )
 
-    return _USER.format(
+    return prompts.USER.format(
         query=query,
         sub_question=sub_question,
         draft=draft or "(no draft available)",
@@ -285,9 +219,9 @@ def _build_user_message(
 
 def _validate_report(
     report: str,
-    contradictions: List[str],
-    gaps: List[str],
-) -> List[str]:
+    contradictions: list[str],
+    gaps: list[str],
+) -> list[str]:
     """
     Return a list of validation issues. Empty list = report is acceptable.
 
@@ -297,7 +231,7 @@ def _validate_report(
        present (not just the header line).
     3. If gaps were provided, the Knowledge Gaps section is non-trivially present.
     """
-    issues: List[str] = []
+    issues: list[str] = []
     lower = report.lower()
 
     for header in _REQUIRED_HEADERS:

@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import logging
 from contextlib import ExitStack, contextmanager
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from research_analyst.config import settings
 

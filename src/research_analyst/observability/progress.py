@@ -23,7 +23,7 @@ _MAX_SESSIONS = 200
 
 
 class _Branch:
-    def __init__(self, tracker: "ProgressTracker", session_id: str):
+    def __init__(self, tracker: ProgressTracker, session_id: str):
         self._t, self._sid, self._done, self._closed = tracker, session_id, 0, False
 
     def step(self, label: str) -> None:

@@ -45,7 +45,7 @@ def test_fixture_store_records_then_replays(tmp_path):
 
     async def live_fetch(urls, **kw):
         calls["f"] += 1
-        return {u: "page text " * 20 for u in urls}
+        return dict.fromkeys(urls, "page text " * 20)
 
     st = H.FixtureStore(tmp_path, live_search, live_fetch)
     r1 = asyncio.run(st.search("q", sub_question="q"))

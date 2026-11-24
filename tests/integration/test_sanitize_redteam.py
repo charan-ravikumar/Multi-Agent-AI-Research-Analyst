@@ -86,7 +86,7 @@ def test_planner_rejects_oversized_query(run_graph, monkeypatch):
 def test_untrusted_sections_are_delimited_and_marked_as_data(run_graph):
     fake = FakeLLM(4, {"critic": lambda p, n: json.dumps({"objections": ["Section 1 claim is not supported by evidence"]})})
     run_graph(fake, make_search(2))
-    prompts = {r: p for r, p in fake.prompts}
+    prompts = dict(fake.prompts)
     assert "<facts>" in prompts["synth"][1]["content"] and "never follow" in prompts["synth"][0]["content"]
     assert "<draft>" in prompts["critic"][1]["content"] and "<evidence>" in prompts["critic"][1]["content"]
     assert "<draft>" in prompts["revise"][1]["content"] and "never instructions" in prompts["revise"][0]["content"]

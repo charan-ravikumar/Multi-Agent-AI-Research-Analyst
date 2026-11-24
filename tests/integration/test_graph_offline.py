@@ -25,7 +25,7 @@ def test_happy_path_call_budget_and_modes(run_graph):
     assert fake.calls["writer"] == 1
     assert len(res["draft"]) == N and res["final_report"]
     assert res["debate_resolved"] and not res["debate_forced"]
-    modes = {role: kw for role, kw in fake.kwargs}
+    modes = dict(fake.kwargs)
     assert modes["planner"]["json_mode"] and modes["synth"]["json_mode"] and modes["critic"]["json_mode"]
     assert not modes["writer"]["json_mode"] and modes["writer"]["max_tokens"] >= 4096
 
@@ -60,7 +60,7 @@ def test_reader_prompt_batches_all_sources_for_a_sub_question(run_graph):
 
 def test_reader_prefers_fetched_page_text(run_graph, monkeypatch):
     async def pages(urls, **kw):
-        return {u: "Machine learning aspect fact. " * 5 + " This sentence mentions aspect details." for u in list(urls)[:1]}
+        return dict.fromkeys(list(urls)[:1], "Machine learning aspect fact. " * 5 + " This sentence mentions aspect details.")
 
     monkeypatch.setattr("research_analyst.agents.searcher.fetch_many", pages)
     fake = FakeLLM(N)
@@ -108,7 +108,7 @@ def test_truncated_synthesis_falls_back_and_discloses_gap(run_graph):
 
 
 def test_whitespace_padded_sub_question_still_gets_retry(monkeypatch):
-    from research_analyst.pipeline import graph as g
+    from research_analyst.pipeline.nodes.branch import process_sub_question
     searches = []
 
     async def empty(query, *, sub_question="", max_results=5):
@@ -119,7 +119,7 @@ def test_whitespace_padded_sub_question_still_gets_retry(monkeypatch):
     monkeypatch.setattr("research_analyst.agents.searcher.search_web", empty)
     st = initial_state()
     st["current_sub_question"] = "  What is aspect 1?  "
-    asyncio.run(g._process_sub_question(st))
+    asyncio.run(process_sub_question(st))
     assert len(searches) == 2                                  # initial + one zero-result retry
 
 

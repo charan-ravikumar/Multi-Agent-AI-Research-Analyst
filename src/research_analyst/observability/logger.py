@@ -157,7 +157,7 @@ def _configure_root() -> None:
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-def get_logger(agent_name: str) -> "AgentLogger":
+def get_logger(agent_name: str) -> AgentLogger:
     """
     Return a logger bound to *agent_name*.
 

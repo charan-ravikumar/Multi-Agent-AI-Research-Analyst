@@ -10,7 +10,7 @@ Pure function over plain mappings so it is testable without Streamlit.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Iterator, Mapping, MutableMapping
 from typing import Any
 
 _PREFIXES = (
@@ -20,7 +20,7 @@ _PREFIXES = (
 _EXACT = {"ENVIRONMENT", "CACHE_TTL_SECONDS"}
 
 
-def _walk(m: Mapping[str, Any]):
+def _walk(m: Mapping[str, Any]) -> Iterator[tuple[str, Any]]:
     for k, v in m.items():
         if isinstance(v, Mapping):
             yield from _walk(v)

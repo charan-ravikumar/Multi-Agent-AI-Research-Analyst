@@ -22,7 +22,7 @@ merge their results automatically without extra orchestrator logic.
 from __future__ import annotations
 
 import operator
-from typing import Annotated, List, Optional
+from typing import Annotated
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -38,8 +38,8 @@ class ResearchState(TypedDict):
     query: str
 
     # ── planner output ────────────────────────────────────────────────────────
-    research_plan: Optional[ResearchPlan]   # full plan + metadata
-    sub_questions: List[str]                # promoted to top-level so the
+    research_plan: ResearchPlan | None   # full plan + metadata
+    sub_questions: list[str]                # promoted to top-level so the
                                             # Searcher fans out without unpacking
 
     # ── searcher inbox ────────────────────────────────────────────────────────
@@ -48,35 +48,35 @@ class ResearchState(TypedDict):
     current_sub_question: NotRequired[str]
 
     # ── searcher output ───────────────────────────────────────────────────────
-    search_results: Annotated[List[SearchResult], operator.add]
+    search_results: Annotated[list[SearchResult], operator.add]
     # Sub-questions that returned zero search results. Synthesizer uses this
     # to note coverage gaps in the draft rather than silently skipping them.
-    failed_sub_questions: Annotated[List[str], operator.add]
+    failed_sub_questions: Annotated[list[str], operator.add]
 
     # ── reader output ─────────────────────────────────────────────────────────
-    extracted_facts: Annotated[List[Fact], operator.add]
+    extracted_facts: Annotated[list[Fact], operator.add]
 
     # ── synthesizer output ────────────────────────────────────────────────────
-    citations: Annotated[List[Citation], operator.add]
+    citations: Annotated[list[Citation], operator.add]
     # Each parallel Synthesizer branch appends its own synthesis paragraph.
     # operator.add accumulates sections in arrival order; WriterAgent joins
     # them before passing to the LLM prompt.
-    draft: Annotated[List[str], operator.add]
+    draft: Annotated[list[str], operator.add]
     # Contradicting claims between sources, flagged explicitly rather than
     # silently resolved. operator.add merges parallel branch outputs.
-    contradictions: Annotated[List[str], operator.add]
+    contradictions: Annotated[list[str], operator.add]
     # Knowledge gaps: facts don't fully answer the sub-question, plus any
     # failed_sub_questions promoted here so Critic/Writer see them explicitly.
-    unresolved_gaps: Annotated[List[str], operator.add]
+    unresolved_gaps: Annotated[list[str], operator.add]
     # Structured gaps: {"sub_question", "kind": "coverage" | "open_question", "text"} (see core/gaps.py).
     # "coverage" = detected by the system; "open_question" = model-suggested follow-up research.
-    gap_items: Annotated[List[dict], operator.add]
+    gap_items: Annotated[list[dict], operator.add]
 
     # ── debate loop control ───────────────────────────────────────────────────
     # Specific, addressable objections produced by CriticAgent each round.
     # Plain list (no operator.add): debate loop is sequential, not parallel.
     # NotRequired — absent in initial state; first written by _debate_loop_node.
-    critic_objections: NotRequired[List[str]]
+    critic_objections: NotRequired[list[str]]
 
     # Number of Critic-Synthesizer rounds completed.
     debate_round: NotRequired[int]
@@ -97,18 +97,18 @@ class ResearchState(TypedDict):
     review_rounds: NotRequired[int]
 
     # Medium/low reviewer points left unaddressed when the loop accepted the draft.
-    review_notes: NotRequired[List[str]]
-    previous_objections: NotRequired[List[str]]
+    review_notes: NotRequired[list[str]]
+    previous_objections: NotRequired[list[str]]
     critic_blocking: NotRequired[int]
-    critic_minor: NotRequired[List[str]]
+    critic_minor: NotRequired[list[str]]
 
     # Debate-revised draft produced by the Synthesizer revision pass.
     # Writer reads this preferentially over state["draft"] (which uses
     # operator.add and cannot be safely overwritten post-fan-in).
-    revised_draft: NotRequired[List[str]]
+    revised_draft: NotRequired[list[str]]
 
     # ── writer output: verified references + grounding stats ─────────────────
-    references: NotRequired[List[dict]]        # [{n, url, title}] actually cited
+    references: NotRequired[list[dict]]        # [{n, url, title}] actually cited
     citation_stats: NotRequired[dict]          # cited_ratio, weakly_supported, ...
     usage_summary: NotRequired[dict]           # tokens/calls by agent+model, optional cost, budget
     debate_budget_exhausted: NotRequired[bool] # review stopped early: token budget spent
@@ -128,7 +128,7 @@ class ResearchState(TypedDict):
 
     # Supervisor routing trace — every decision is appended so the full path is
     # observable after the run.  operator.add keeps entries from all branches.
-    routing_history: Annotated[List[str], operator.add]
+    routing_history: Annotated[list[str], operator.add]
 
     # Past reports whose topics overlap with the current query, surfaced before
     # the human checkpoint so the researcher can see what has already been done.
@@ -136,6 +136,6 @@ class ResearchState(TypedDict):
     # matching — see memory/redis_store.py for documented limitations).
     # NotRequired: absent until the plan-approval node runs; not accumulated
     # across branches (plain field, last-write-wins).
-    related_past_reports: NotRequired[List[dict]]
+    related_past_reports: NotRequired[list[dict]]
 
 

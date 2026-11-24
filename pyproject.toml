@@ -23,6 +23,7 @@ dependencies = [
     "httpx>=0.28.1",
     "trafilatura>=2.3.1",
     "langfuse>=4.18.0",
+    "defusedxml>=0.7.1",
 ]
 
 [dependency-groups]
@@ -31,29 +32,32 @@ dev = [
     "fakeredis>=2.20",
     "ruff>=0.5",
     "mypy>=2.4.1",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 norecursedirs = ["manual"]
-addopts = "-q"
+addopts = "-q --cov=research_analyst --cov-report=term:skip-covered --cov-fail-under=80"
 
 [tool.ruff]
 line-length = 120
 extend-exclude = ["tests/manual"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "B"]
+select = ["E4", "E7", "E9", "F", "B", "UP", "S", "ASYNC", "C4", "SIM", "PIE"]
 ignore = ["B008", "B905", "B007"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*" = ["E402"]        # scripts put src/ on sys.path before importing
 "app/main.py" = ["E402"]      # env vars / sys.path must be set before project imports
-"tests/*" = ["E402"]
+"tests/*" = ["E402", "S101", "S105", "S106", "S603", "S607", "S311", "S104"]   # asserts, dummy keys, subprocess in tests
 
 [tool.mypy]
 ignore_missing_imports = true
 mypy_path = "src"
 explicit_package_bases = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
 files = ["src/research_analyst", "app", "scripts"]

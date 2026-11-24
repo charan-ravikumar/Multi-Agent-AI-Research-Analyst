@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ class ResearchPlan(BaseModel):
     """
 
     query: str
-    sub_questions: List[str] = Field(
+    sub_questions: list[str] = Field(
         min_length=settings.planner_min_sub_questions,
         max_length=settings.planner_max_sub_questions,
     )

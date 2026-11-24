@@ -26,7 +26,8 @@ import threading
 import time
 from collections import deque
 from enum import Enum
-from typing import Callable, List, Literal, Union, overload
+from typing import Literal, overload
+from collections.abc import Callable
 
 import groq
 from google.genai.errors import APIError as GeminiAPIError
@@ -59,15 +60,15 @@ _GEMINI_TIER_MAP = {
 # ── public API ───────────────────────────────────────────────────────────────
 
 @overload
-def generate(prompt: Union[str, List[dict]], *, tier: ModelTier = ..., system: str | None = ...,
+def generate(prompt: str | list[dict], *, tier: ModelTier = ..., system: str | None = ...,
              temperature: float | None = ..., max_tokens: int | None = ..., return_usage: Literal[False] = ...,
              json_mode: bool = ..., prefer: str | None = ..., groq_model: str | None = ...) -> str: ...
 @overload
-def generate(prompt: Union[str, List[dict]], *, tier: ModelTier = ..., system: str | None = ...,
+def generate(prompt: str | list[dict], *, tier: ModelTier = ..., system: str | None = ...,
              temperature: float | None = ..., max_tokens: int | None = ..., return_usage: Literal[True],
              json_mode: bool = ..., prefer: str | None = ..., groq_model: str | None = ...) -> tuple[str, dict]: ...
 def generate(
-    prompt: Union[str, List[dict]],
+    prompt: str | list[dict],
     *,
     tier: ModelTier = ModelTier.STRONG,
     system: str | None = None,
@@ -93,10 +94,10 @@ def generate(
     return (text, usage) if return_usage else text
 
 
-def _build_messages(prompt: Union[str, List[dict]], system: str | None) -> List[dict]:
+def _build_messages(prompt: str | list[dict], system: str | None) -> list[dict]:
     if isinstance(prompt, list):
         return prompt
-    messages: List[dict] = []
+    messages: list[dict] = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
@@ -184,7 +185,7 @@ _tpm = _TpmLimiter()
 _EXPECTED_COMPLETION = 600   # reservation cap: most calls finish far below max_tokens
 
 
-def _estimate_tokens(messages: List[dict], max_tokens: int) -> int:
+def _estimate_tokens(messages: list[dict], max_tokens: int) -> int:
     return sum(len(m.get("content", "")) for m in messages) // 4 + min(max_tokens, _EXPECTED_COMPLETION)
 
 
@@ -220,7 +221,7 @@ def _retry_after(exc: BaseException) -> float | None:
 
 
 def _delay(attempt: int, exc: BaseException) -> float:
-    backoff = (_BACKOFF_BASE ** attempt) * random.uniform(0.5, 1.0)       # jittered exponential
+    backoff = (_BACKOFF_BASE ** attempt) * random.uniform(0.5, 1.0)  # noqa: S311 — retry jitter, not security       # jittered exponential
     ra = _retry_after(exc)
     if ra is not None:
         backoff = max(backoff, min(ra, settings.llm_retry_after_cap_seconds))
@@ -245,14 +246,15 @@ def _with_retries(provider: str, model: str, call: Callable[[], tuple[str, dict]
             logger.warning("%s retryable error (attempt %d/%d) — waiting %.1fs: %s",
                            provider, attempt, _MAX_RETRIES, wait, exc)
             time.sleep(wait)
-    assert last is not None
+    if last is None:                      # unreachable: the loop runs at least once
+        raise RuntimeError("retry loop did not run")
     raise last
 
 
 # ── orchestration ────────────────────────────────────────────────────────────
 
 def _call_with_fallback(
-    messages: List[dict],
+    messages: list[dict],
     *,
     tier: ModelTier,
     temperature: float,

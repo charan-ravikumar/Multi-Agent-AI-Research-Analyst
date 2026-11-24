@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import List
 
 # ── New unified Google GenAI SDK (google-genai >= 2.x) ───────────────────────
 # Replaces the deprecated google-generativeai SDK (deprecated 2025-11-30).
@@ -55,7 +54,7 @@ def _get_client() -> genai.Client:
 
 
 def generate(
-    messages: List[dict],
+    messages: list[dict],
     *,
     model: str = GEMINI_MODEL,
     temperature: float = 0.2,

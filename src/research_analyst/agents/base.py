@@ -19,10 +19,13 @@ LangGraph registers each agent as a graph node via its __call__:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import traceback
 from abc import ABC, abstractmethod
-from typing import Any, Mapping
+from collections.abc import Callable
+from typing import Any, TypeVar
+from collections.abc import Mapping
 
 from research_analyst import llm
 from research_analyst.observability import tracing
@@ -30,6 +33,7 @@ from research_analyst.observability.logger import get_logger
 from research_analyst.observability.usage import estimate_cost, tracker
 from research_analyst.llm import ModelTier
 
+T = TypeVar("T")
 
 # A node receives the (possibly branch-local) graph state and returns a PARTIAL update.
 StateLike = Mapping[str, Any]
@@ -179,3 +183,42 @@ class BaseAgent(ABC):
             tokens=usage,
         )
         return text, usage
+
+    async def generate_parsed(
+        self,
+        messages: list[dict],
+        parse: Callable[[str], T],
+        state: StateLike,
+        *,
+        retry_message: str,
+        step: str,
+        attempts: int = 2,
+        guard: Any = None,
+    ) -> tuple[T | None, str]:
+        """Generate -> parse; on a parse failure, show the model its own answer plus the error and retry.
+
+        The one place that implements the "structured output with a corrective retry" pattern.  ``parse``
+        must raise ``ValueError`` (``json.JSONDecodeError`` and pydantic's ``ValidationError`` both are)
+        for an unusable answer.  ``guard`` is an optional async context manager (e.g. a semaphore) held
+        around each LLM call.  Returns ``(value, last_error)``; ``value`` is None when every attempt failed.
+        Transport errors (RuntimeError from the LLM layer) propagate: they are not parse failures.
+        """
+        last_raw, last_error = "", ""
+        for attempt in range(1, attempts + 1):
+            if attempt > 1:
+                messages.append({"role": "assistant", "content": last_raw})
+                messages.append({"role": "user", "content": retry_message.format(error=last_error)})
+            async with guard or contextlib.nullcontext():
+                last_raw, _usage = await self.llm_generate(messages, state=state)
+            try:
+                return parse(last_raw), ""
+            except ValueError as exc:
+                last_error = str(exc)
+                self.log.warning(
+                    f"{step}: could not parse the answer (attempt {attempt}/{attempts}): {last_error}",
+                    step=step,
+                    session_id=state["session_id"],
+                    iteration=state.get("iteration", 0),
+                    attempt=attempt,
+                )
+        return None, last_error

@@ -147,7 +147,9 @@ class SearcherAgent(BaseAgent):
         )
         return [r for r in found if arxiv_relevant(sub_question, r, settings.arxiv_min_overlap)]
 
-    async def _enrich_with_pages(self, results, sub_question: str, session_id: str, iteration: int):
+    async def _enrich_with_pages(
+        self, results: list[SearchResult], sub_question: str, session_id: str, iteration: int
+    ) -> list[SearchResult]:
         top = [r for r in results[: settings.fetch_top_n] if r.source_type == "web"]
         pages = await fetch_many(r.url for r in top)
         enriched = []

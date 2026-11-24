@@ -28,7 +28,8 @@ import statistics
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
@@ -56,7 +57,7 @@ def _h(*parts: Any) -> str:
 # ── record / replay ───────────────────────────────────────────────────────────
 
 class FixtureStore:
-    def __init__(self, root: Path = FIXTURES, live_search=None, live_fetch=None, live_arxiv=None):
+    def __init__(self, root: Path = FIXTURES, live_search: Any = None, live_fetch: Any = None, live_arxiv: Any = None) -> None:
         self.root = root
         root.mkdir(parents=True, exist_ok=True)
         self._live_search = live_search
@@ -65,7 +66,7 @@ class FixtureStore:
         self.recorded = 0
         self.replayed = 0
 
-    async def search(self, query, *, sub_question="", max_results=5):
+    async def search(self, query: str, *, sub_question: str = "", max_results: int = 5) -> list[SearchResult]:
         p = self.root / f"search_{_h(query)}.json"      # keyed by the exact query string
         if p.exists():
             self.replayed += 1
@@ -75,7 +76,7 @@ class FixtureStore:
         self.recorded += 1
         return results
 
-    async def arxiv(self, query, *, sub_question="", max_results=3, **kw):
+    async def arxiv(self, query: str, *, sub_question: str = "", max_results: int = 3, **kw: Any) -> list[SearchResult]:
         p = self.root / f"arxiv_{_h(query)}.json"
         if p.exists():
             self.replayed += 1
@@ -85,7 +86,7 @@ class FixtureStore:
         self.recorded += 1
         return results
 
-    async def fetch(self, urls, **kw):
+    async def fetch(self, urls: Any, **kw: Any) -> dict[str, str]:
         urls = list(dict.fromkeys(urls))
         out: dict[str, str] = {}
         missing = []
@@ -119,8 +120,8 @@ class CachedLLM:
         self.misses = 0
         self.miss_tokens = 0
 
-    def __call__(self, prompt, *, tier=None, system=None, temperature=None, max_tokens=None,
-                 return_usage=False, json_mode=False, prefer=None, groq_model=None):
+    def __call__(self, prompt: Any, *, tier: Any = None, system: Any = None, temperature: Any = None, max_tokens: Any = None,
+                 return_usage: bool = False, json_mode: bool = False, prefer: Any = None, groq_model: Any = None) -> Any:
         extra = [groq_model] if groq_model else []        # keeps keys of older cache entries valid
         key = _h(prompt, system, getattr(tier, "value", tier), temperature, max_tokens, json_mode, prefer, *extra)
         p = self.dir / f"{key}.json"
@@ -299,7 +300,7 @@ LOWER_BETTER = ["uncited", "weakly_supported", "judge_unsupported_claims"]
 INFO = ["report_words", "tokens_nominal", "llm_calls_nominal", "gaps", "debate_rounds", "review_notes", "sources_cited"]
 
 
-def _mean(xs):
+def _mean(xs: list[Any]) -> float | None:
     xs = [x for x in xs if isinstance(x, (int, float))]
     return round(statistics.mean(xs), 3) if xs else None
 
