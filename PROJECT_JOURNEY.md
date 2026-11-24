@@ -36,7 +36,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | Self-critique / reflection | Critic ⇄ Reviser (`agents/critic.py`, `nodes/debate.py`) | opt-in; measured not worth it by default |
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
-| Gemini-only + native tools + structured outputs | `llm/`, `agents/react_search.py`, `llm/schemas.py` | branch `feature/gemini-only-native-tools`, awaiting confirmation |
+| Gemini-only + native tools + structured outputs | `llm/`, `agents/react_search.py`, `llm/schemas.py` | merged to `main` 2026-11-24 on your confirmation; Writer on 3.8 Flash not verified live |
 | Prompt versioning | `observability/prompt_store.py` (Langfuse) | merged to `main` 2026-11-24 on your confirmation; **not yet run against real Langfuse** |
 
 ## 3. Timeline
@@ -158,7 +158,7 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** Why keep a local fallback? How do you stop a prompt edit in a UI from breaking production? How would you A/B two prompt versions and attribute the difference? What's the difference between tagging a trace with a prompt hash and linking it to a managed version? Where do prompts belong — code or a registry — and what are the trade-offs (review, rollback, drift, latency)?
 
-### 2026-11-24 — Feature branch `feature/gemini-only-native-tools`: Gemini-only, native function calling, structured outputs **(on branch, awaiting your confirmation)**
+### 2026-11-24 — Feature branch `feature/gemini-only-native-tools`: Gemini-only, native function calling, structured outputs **(merged to main on your confirmation)**
 
 **Context [DECIDED — your instructions]:** remove Groq; use only Gemini; **no fallback**; `gemini-3.5-flash-lite` for most agents and `gemini-3.8-flash` only where needed; function calling through the API; structured outputs for all tools/functions. Your limits: 3.8 Flash = 5 RPM / 250K TPM / 20 RPD; 3.5 Flash Lite = 15 RPM / 250K TPM / 500 RPD.
 
