@@ -27,6 +27,8 @@ async def main() -> int:
     ap.add_argument("--max-new-tokens", type=int, default=120_000)
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
+    from research_analyst.llm.preflight import assert_models_available
+    assert_models_available()
 
     queries = json.loads((H.ROOT / "golden_queries.json").read_text("utf-8"))[: a.queries]
     configs = a.configs.split(",")
