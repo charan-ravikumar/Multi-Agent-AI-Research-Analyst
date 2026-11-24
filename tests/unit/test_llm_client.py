@@ -353,3 +353,26 @@ def test_empty_candidates_yield_a_turn_without_calls(monkeypatch):
     _patch_client(monkeypatch, SimpleNamespace(text=None, candidates=[], usage_metadata=None))
     turn = gemini_client.tool_turn("s", [user_turn("x")], TOOLS, model="m")
     assert turn.calls == [] and turn.content is None
+
+
+# ── overload (5xx) backoff ───────────────────────────────────────────────────
+
+def test_overload_503_backs_off_long_enough_for_a_demand_spike_to_pass():
+    waits = [c._delay(a, _503()) for a in (1, 2, 3)]
+    assert 6.0 <= waits[0] <= 8.0 and 12.0 <= waits[1] <= 16.0 and 18.0 <= waits[2] <= 24.0      # 8 s x attempt, jittered
+
+
+def test_rate_limit_429_keeps_the_short_exponential_backoff():
+    assert max(c._delay(1, _429()) for _ in range(20)) <= 2.0 + 1e-9
+
+
+def test_a_503_that_recovers_after_the_long_waits_succeeds(monkeypatch, sleeps):
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] < 4:
+            raise _503()
+        return OK
+    monkeypatch.setattr(c.gemini_client, "generate", flaky)
+    assert _gen()[0] == "ok" and calls["n"] == 4 == c._MAX_RETRIES and sum(sleeps) > 20

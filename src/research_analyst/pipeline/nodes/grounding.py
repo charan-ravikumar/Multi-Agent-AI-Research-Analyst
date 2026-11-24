@@ -22,7 +22,7 @@ async def grounding_judge_node(state: ResearchState) -> dict:
     except Exception as exc:  # noqa: BLE001 — the report is already complete; the judge is an add-on
         _log.warning(f"grounding judge failed: {type(exc).__name__}: {exc}", step="judge_failed", session_id=sid)
         out = {"claim_verdicts": {"verdicts": {}, "summary": {}, "judge": {
-            "model": settings.judge_model or "default", "status": "failed", "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}}
+            "model": settings.judge_model or "judge", "status": "failed", "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}}
     # The Writer snapshotted usage before the judge ran; refresh it so tokens/cost include the judge's calls.
     out["usage_summary"] = tracker.summary(sid)
     return out

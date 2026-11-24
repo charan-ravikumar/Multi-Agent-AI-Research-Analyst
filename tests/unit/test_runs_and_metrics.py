@@ -253,3 +253,17 @@ def test_monitor_page_renders_empty_state_and_with_data():
     labels = {m.label: m.value for m in at.metric}
     assert labels["Runs recorded"] == "4" and labels["Completed"] == "75%" and labels["Claims supported"] == "75%"
     assert not any("No runs have been recorded yet" in i.value for i in at.info)
+
+
+def test_record_uses_the_runs_own_final_usage_not_the_cleared_tracker():
+    """The memory node clears the in-memory tracker before the UI thread records the run; the state's summary must win."""
+    state = {**STATE, "usage_summary": USAGE}
+    cleared = {"total_tokens": 0, "calls": 0, "by_agent": {}, "by_model": {}}
+    r = runs.build_record("sid", "complete", state, "", 10.0, "q", usage=cleared)
+    assert r["tokens"] == 22000 and r["calls"] == 24 and "writer" in r["by_agent"]
+
+
+def test_record_falls_back_to_the_tracker_when_the_run_died_before_a_summary():
+    live = {"total_tokens": 4200, "calls": 6, "by_agent": {"reader": {"calls": 6, "total_tokens": 4200, "latency_s": 3.0}}, "by_model": {}}
+    r = runs.build_record("sid", "failed", None, "boom", 5.0, "q", usage=live)
+    assert r["tokens"] == 4200 and r["calls"] == 6

@@ -90,7 +90,7 @@ def test_agent_judges_all_claims_in_one_batch_with_the_independent_judge_model(m
     cv = run_agent(fake, monkeypatch)
     assert fake.calls["judge"] == 1
     assert {k: v["verdict"] for k, v in cv["verdicts"].items()} == {"1": "supported", "2": "partial", "3": "unsupported"}
-    assert cv["summary"]["supported"] == 1 and cv["judge"]["status"] == "ok"
+    assert cv["summary"]["supported"] == 1 and cv["judge"]["status"] == "ok" and cv["judge"]["model"] == "qwen/judge-model"
     assert fake.kwargs[0][1]["json_mode"] is True
 
 
@@ -160,3 +160,9 @@ def test_verify_payload_carries_verdicts_and_defaults_to_empty():
     cv = {"verdicts": {"1": {"verdict": "supported", "supporting_refs": [1], "reason": "r"}}}
     assert verify_payload(REPORT, RESULTS, FACTS, REFS, cv)["verdicts"] == cv
     assert verify_payload(REPORT, RESULTS, FACTS, REFS)["verdicts"] == {}
+
+
+def test_judge_reports_the_actual_model_name_not_a_placeholder_when_none_is_configured(monkeypatch):
+    monkeypatch.setattr(settings, "judge_model", "")
+    fake = FakeLLM(overrides={"judge": lambda p, n: verdict_json((1, "supported", [1]), (2, "supported", [2]), (3, "supported", [1]))})
+    assert run_agent(fake, monkeypatch)["judge"]["model"] == "gemini-3.5-flash-lite"

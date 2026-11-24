@@ -54,7 +54,10 @@ def build_record(
 ) -> dict[str, Any]:
     """Flatten one run.  ``status`` is complete/partial/failed/cancelled (see ``classify``)."""
     state = state or {}
-    usage = usage or state.get("usage_summary") or {}
+    final = state.get("usage_summary") or {}
+    # The finished run carries its own final summary (the in-memory tracker is cleared by the memory node); the tracker
+    # snapshot is only the fallback for runs that died before producing one.
+    usage = final if final.get("calls") else (usage or final)
     cs = state.get("citation_stats") or {}
     cv = state.get("claim_verdicts") or {}
     summ, judge = cv.get("summary") or {}, cv.get("judge") or {}

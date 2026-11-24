@@ -48,12 +48,15 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2048
 
     # ── LLM — retry / backoff ─────────────────────────────────────────────────
-    llm_max_retries: int = 3
+    llm_max_retries: int = 4
     llm_backoff_base: float = 2.0
     # One retry policy lives in llm/client.py (SDK-level retries are disabled so
     # attempts do not multiply).  Delays use jitter and honour Retry-After.
     llm_timeout_seconds: float = 45.0          # per HTTP request, both providers
     llm_retry_after_cap_seconds: float = 20.0  # never sleep longer than this on Retry-After
+    # Google's 503/504 "high demand" spikes last tens of seconds, so a 1-4 s backoff just burns requests: for 5xx the wait
+    # is this base x attempt (8 s, 16 s, 24 s ...) with jitter.
+    llm_overload_backoff_seconds: float = 8.0
     # Circuit breaker: after N consecutive exhausted calls a provider is skipped
     # for the cooldown instead of making every call pay the full retry cost.
     llm_breaker_threshold: int = 3

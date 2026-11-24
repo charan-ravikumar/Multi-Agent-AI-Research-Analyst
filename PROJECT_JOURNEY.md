@@ -227,6 +227,27 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** What would you monitor for an LLM application, and why those metrics? How do you separate per-request telemetry from process-level counters? What are the trade-offs of storing metrics in a file vs a TSDB? How does streaming interact with output post-processing (validation, citation numbering)? Why `st.fragment` for live updates? How do you test UI code that depends on a framework's internal DOM? What does "completed" mean as a success metric when partial reports exist?
 
+### 2026-11-25 — First real end-to-end run + fixes: branch `fix/overload-backoff-and-run-usage` **(on branch, awaiting your confirmation)**
+
+**Context [DECIDED — your request]:** "run and check if everything works fine." I ran the app locally with your real key and drove it in headless Chrome (type a question → plan → approve → watch the run → results → verify panel → Monitor), after first loading your deployed Streamlit link (loads, new design, no errors; Monitor empty as expected).
+
+**What I observed [MEASURED]**
+- **Run 1 (defaults): FAILED at the Writer.** Planning, search, reading and synthesis worked (~2.5 min, 21 calls) and then `gemini-3.8-flash` returned **503 on all retries** → whole run failed, discarding all the research. Four direct probes over several hours: 3.8 Flash 503'd every time, Flash Lite answered every time. 3 retries × 2 runs also burned ~6 of your 20 daily 3.8 requests.
+- **Run 2: planner failed** — Flash Lite itself 503'd for ~10 s (a transient spike); recovered within a minute.
+- **Run 3 (`GEMINI_STRONG_AGENTS=` empty, everything on Flash Lite): completed, as a *partial* report** — 2 of 4 sub-questions failed on 503 spikes and the judge stopped after one batch (12 of the claims checked: 11 supported, 1 partial). What worked: **the report streamed live** (3,894 chars seen before completion, screenshot confirmed), citations 14/15, verify panel with judge verdicts, no UI exceptions, Monitor tab populated with real data.
+
+**Bugs found and fixed here**
+1. **Run record had 0 tokens/calls** — root cause: the memory node clears the in-memory usage tracker before the UI thread records the run, so the record read an empty tracker. Fix: prefer the run's own final `usage_summary`; fall back to the tracker only for runs that died before producing one.
+2. **503 backoff far too short** (1.5 s + 3.8 s ≈ 5 s total) for Google "high demand" spikes that last tens of seconds, so retries just burned requests and branches failed. Fix: for 5xx the wait is `LLM_OVERLOAD_BACKOFF_SECONDS` (8 s) × attempt with jitter, and `LLM_MAX_RETRIES` 3→4 (≈ 8+16+24 s). 429 keeps the short exponential backoff.
+3. Judge line said "(default)" instead of the model name — now shows the real model.
+4. My own earlier test runs had written 8 junk records into your local (gitignored) `logs/runs.jsonl` before I isolated tests; removed (kept the 2 real ones).
+
+**Still open — a decision for you [not made]:** the Writer on `gemini-3.8-flash` fails every run while that model is overloaded, and with no fallback that fails the whole run. Options: (a) set `GEMINI_STRONG_AGENTS=` empty (everything on Flash Lite) until 3.8 stabilises; (b) keep it and accept failures; (c) allow the Writer to retry on the fast Gemini model if the strong one is down (a model fallback inside Gemini, which you said you didn't want, so I did not add it).
+
+**Lessons:** a happy-path unit-test suite (374 tests) did not reveal that a provider outage at the last step throws away the whole run, nor the tracker/record ordering bug — both appeared only in a real end-to-end run. Retry policy must match the failure's time scale (overload spikes ≠ rate limits).
+
+**Interview questions this adds:** How do you handle a provider that is down only for your most important call? What is the right retry/backoff for 429 vs 503? How do you test timing/ordering bugs between components that clear shared state? Why partial results over failure, and how do you tell the user?
+
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.
 2. **A/B:** `run_eval --queries 5 --configs no_debate,react` (≥3 runs each for variance); report faithfulness, completeness, tokens, calls, time.

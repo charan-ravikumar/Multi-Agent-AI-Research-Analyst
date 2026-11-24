@@ -8,6 +8,7 @@ from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.config import settings
 from research_analyst.grounding import judge
 from research_analyst.grounding.verify import build_evidence_index, extract_claims
+from research_analyst.llm import model_for
 from research_analyst.llm.schemas import JudgeOut
 from research_analyst.observability.prompt_store import resolve
 from research_analyst.observability.usage import BudgetExceeded
@@ -36,7 +37,7 @@ class GroundingJudgeAgent(BaseAgent):
         report = state.get("final_report", "")
         refs = state.get("references", [])
         claims = extract_claims(report)[: settings.grounding_judge_max_claims]
-        info: dict[str, Any] = {"model": settings.judge_model or "default", "status": "ok", "error": ""}
+        info: dict[str, Any] = {"model": settings.judge_model or model_for(self.tier), "status": "ok", "error": ""}
         if not claims or not refs:
             return {"claim_verdicts": {"verdicts": {}, "summary": judge.summarise({}, len(claims)),
                                        "judge": {**info, "status": "skipped"}}}

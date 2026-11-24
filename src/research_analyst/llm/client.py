@@ -245,7 +245,11 @@ def _retry_after(exc: BaseException) -> float | None:
 
 
 def _delay(attempt: int, exc: BaseException) -> float:
-    backoff = (_BACKOFF_BASE ** attempt) * random.uniform(0.5, 1.0)  # noqa: S311 — retry jitter, not security
+    code = _status_of(exc)
+    if code is not None and code >= 500:                      # provider overloaded: wait long enough for the spike to pass
+        backoff = settings.llm_overload_backoff_seconds * attempt * random.uniform(0.75, 1.0)  # noqa: S311
+    else:
+        backoff = (_BACKOFF_BASE ** attempt) * random.uniform(0.5, 1.0)  # noqa: S311 — retry jitter, not security
     ra = _retry_after(exc)
     if ra is not None:
         backoff = max(backoff, min(ra, settings.llm_retry_after_cap_seconds))
