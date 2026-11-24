@@ -1,13 +1,13 @@
 """
 tools/run_demo.py — Run one real graph invocation and print the session_id.
 
-This makes a live Groq LLM call with real web search (DuckDuckGo).
+This makes live Gemini LLM calls with real web search (DuckDuckGo).
 After it completes, run:
     python tools/trace_summary.py --last
 to see the full decision timeline.
 
 Rate-limit note: SEARCH_MAX_RESULTS is set to 3 and READER_MAX_CONCURRENT_LLM_CALLS
-to 1 so the parallel Reader branches stay within Groq's free-tier 6,000 TPM limit.
+to 1 so the parallel Reader branches stay within the free-tier 15 requests/minute limit.
 """
 from __future__ import annotations
 

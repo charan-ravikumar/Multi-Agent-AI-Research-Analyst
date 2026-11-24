@@ -35,8 +35,8 @@ Langfuse tracing with quality scores, **versioned prompts (Langfuse Prompt Manag
 
 ## Cost and speed (measured)
 
-Five sample reports, one run each, free-tier Groq keys (`openai/gpt-oss-20b` for reading, `-120b` for the rest),
-default settings:
+Five sample reports, one run each, **on the earlier Groq setup** (free-tier `openai/gpt-oss-20b` for reading, `-120b` for the
+rest) — these numbers predate the move to Gemini-only and have not been re-measured; default settings:
 
 | Report | Time | Tokens | LLM calls | Sources cited | Claims cited (final report) | Coverage warnings |
 |---|---|---|---|---|---|---|
@@ -60,11 +60,16 @@ Each item below is covered by offline tests; where a live run exposed the proble
 
 - A failing sub-question does not abort the run: it becomes a coverage warning and the report is marked partial.
   The run only fails if every branch fails.
-- One retry policy: jittered backoff honouring `Retry-After`, a circuit breaker, a per-model token-per-minute
-  limiter, request timeouts, and a fallback chain Groq primary → second Groq model → Gemini. Groq JSON-mode
-  rejections are salvaged by the tolerant parser instead of paying for a second generation.
-- Structured output uses provider JSON mode, a tolerant parser, one corrective retry, and `finish_reason`
-  logging. A truncated judge is an error, never a score.
+- **Gemini only, no fallback provider.** One retry policy: jittered backoff honouring `Retry-After`, a per-model circuit
+  breaker that fails fast, request timeouts, and free-tier limits enforced in code per model (requests/minute and
+  tokens/minute are waited for; the requests/day budget is counted, persisted and raises a clear error instead of
+  burning retries). A fast model (`gemini-3.5-flash-lite`) serves most agents; the stronger `gemini-3.8-flash` (only 20
+  requests/day on the free tier) is used only for the agents in `GEMINI_STRONG_AGENTS` (default: the Writer).
+- **Native function calling for the ReAct search** (tools declared to the API, mode `ANY`: the model can only answer with
+  a call to a declared tool, arguments checked against a JSON schema) and **schema-constrained structured outputs**
+  (Pydantic `response_schema`) for the Planner, Reader, Synthesizer, Critic, query rewrite and grounding judge. The API
+  guarantees the SHAPE; each agent still validates meaning, retries once with its own error, and a truncated answer
+  is an error, never a score. The Writer's Markdown report is plain text by design.
 - Untrusted web text is stripped of control characters, forged markers and delimiter tags and wrapped in data
   tags; the final Markdown cannot render images, raw HTML or non-http(s) links. Fetching refuses non-public
   addresses (including via redirects); arXiv XML is parsed with `defusedxml`.
@@ -73,8 +78,9 @@ Each item below is covered by offline tests; where a live run exposed the proble
 ## Evaluation
 
 `uv run python -m research_analyst.evaluation.run_eval --queries 3 --configs no_debate,debate` records search
-results and caches LLM calls so both configurations see identical evidence. Generator: Groq `gpt-oss`;
-judge: `qwen/qwen3.8-27b` (a different model family), scoring up to 10 cited claims per report against the facts
+results and caches LLM calls so both configurations see identical evidence. Results below were produced on the earlier Groq setup (generator Groq `gpt-oss`;
+judge `qwen/qwen3.8-27b`, a different model family); the judge now defaults to the same Gemini family as the generator, so
+self-preference bias is possible. It scored up to 10 cited claims per report against the facts
 extracted from their cited sources. Raw results: `src/research_analyst/evaluation/results/`.
 
 | 3 queries, 1 run each | no review loop | review loop (2 rounds) |
@@ -108,8 +114,10 @@ first run).
   passages back the claim, not that the claim is true; the judge can be wrong and has **not yet been validated
   against human labels** (nor were the ReAct mode's effect on quality or cost measured). Facts are LLM-extracted. Search results vary between runs, so the same question can yield different
   conclusions.
-- **Free-tier limits bite:** Groq is 8,000 tokens/minute per model; Gemini's free tier allowed only 20 requests/day
-  for `gemini-2.5-flash`, so it is a last-resort fallback only. arXiv rate-limits by IP (the client backs off).
+- **Free-tier limits bite, and there is no fallback:** `gemini-3.8-flash` allows 5 requests/minute and 20/day,
+  `gemini-3.5-flash-lite` 15/minute and 500/day (about 25 calls per run, so roughly 20 runs/day; more in ReAct mode). If a
+  model is overloaded (503/504, seen on `gemini-3.8-flash`) retries are exhausted and the run fails — set
+  `GEMINI_STRONG_AGENTS=` (empty) to run everything on the fast model. arXiv rate-limits by IP (the client backs off).
 - Single process: in-memory LangGraph checkpoints (paused plans are lost on restart), no authentication or
   multi-user isolation, progress is in-process. "Cross-run memory" is keyword matching over past reports; it is
   shown to the human and does not influence generation.
@@ -129,12 +137,12 @@ docs/           ARCHITECTURE.md, STORY.md
 
 ## Run it
 
-Requirements: Python 3.12, [uv](https://github.com/astral-sh/uv), Groq (and optionally Gemini) API keys.
+Requirements: Python 3.12, [uv](https://github.com/astral-sh/uv), a Gemini API key.
 Redis is optional.
 
 ```bash
 uv sync
-cp .env.example .env            # fill in GROQ_API_KEY (and optionally GEMINI_API_KEY, LANGFUSE_*)
+cp .env.example .env            # fill in GEMINI_API_KEY (and optionally LANGFUSE_*)
 
 uv run streamlit run app/main.py            # the app
 uv run python scripts/run_demo.py           # one run on the command line
@@ -151,12 +159,10 @@ docker compose up --build       # app on 127.0.0.1:8501 + Redis; the UI has no a
 **Streamlit Community Cloud:** main file `app/main.py`, Python 3.12. Add secrets (top-level or under a section):
 
 ```toml
-GROQ_API_KEY = "..."
-GEMINI_API_KEY = "..."                                   # optional fallback
+GEMINI_API_KEY = "..."
 LANGFUSE_PUBLIC_KEY = "..."                              # optional tracing
 LANGFUSE_SECRET_KEY = "..."
 LANGFUSE_BASE_URL = "https://us.cloud.langfuse.com"      # your Langfuse region
-LLM_TPM_BUDGET = "7000"                                  # stay under Groq's 8,000 tokens/minute
 TOKEN_BUDGET_PER_RUN = "60000"
 ```
 
@@ -164,6 +170,6 @@ There is no Redis on Cloud (memory features do nothing) and the filesystem is ep
 history). `requirements.txt` is generated from `uv.lock` (`uv export --no-dev --no-hashes --no-emit-project`).
 
 Useful settings (see `src/research_analyst/config.py` and `.env.example`): `TOKEN_BUDGET_PER_RUN`,
-`LLM_PRICE_PER_1M_TOKENS`, `LLM_TPM_BUDGET`, `GROQ_FAST_MODEL`, `GROQ_STRONG_MODEL`, `GROQ_FALLBACK_MODEL`,
-`CRITIC_MODEL`, `JUDGE_MODEL`, `QUERY_REWRITE`, `ARXIV_ENABLED`, `ARXIV_FULLTEXT`, `FETCH_PAGES`,
+`LLM_PRICE_PER_1M_TOKENS`, `GEMINI_FAST_MODEL`, `GEMINI_STRONG_MODEL`, `GEMINI_STRONG_AGENTS`, `GEMINI_RATE_LIMITS`,
+`GEMINI_THINKING_LEVEL`, `JUDGE_MODEL`, `QUERY_REWRITE`, `ARXIV_ENABLED`, `ARXIV_FULLTEXT`, `FETCH_PAGES`,
 `READER_BATCH_SIZE`, `READER_TARGET_FACTS`, `DEBATE_MAX_ROUNDS`, `RUN_TIMEOUT_SECONDS`, `LOG_FORMAT`.

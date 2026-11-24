@@ -26,6 +26,7 @@ def phase_planning() -> None:
             query=st.session_state.query,
             research_plan=None,
             sub_questions=[],
+            react_traces=[],
             search_results=[],
             failed_sub_questions=[],
             extracted_facts=[],

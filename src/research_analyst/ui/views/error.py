@@ -14,10 +14,9 @@ def phase_error() -> None:
 
     if re.search(r"\b(rate[- ]?limit\w*|429|tpm|tpd|exhausted|quota)\b", err_lower):
         st.error(
-            "**Groq rate limit reached.**\n\n"
-            "The free tier enforces a tokens-per-minute (TPM) and a daily "
-            "tokens-per-day (TPD) budget.  Wait a few minutes for a TPM reset, "
-            "or up to 24 hours for the rolling TPD window to recover.",
+            "**Gemini quota reached.**\n\n"
+            "The free tier limits requests per minute (RPM) and per day (RPD) for each model. "
+            "Wait a minute for an RPM reset; a daily limit resets at midnight Pacific time.",
             icon="🚦",
         )
     elif any(kw in err_lower for kw in ("redis", "10061", "connection refused")):

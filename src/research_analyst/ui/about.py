@@ -33,8 +33,8 @@ It is a research *aid*, not an authority. Always open the cited sources before r
    did not improve faithfulness).
 
 ### Built with
-Python · LangGraph (parallel fan-out per sub-question, human approval step) · Groq `gpt-oss` models with
-Gemini as a last-resort fallback · DuckDuckGo + arXiv · trafilatura + BM25 for page text · Streamlit ·
+Python · LangGraph (parallel fan-out per sub-question, human approval step) · Gemini models only (a fast model for most steps, a stronger one for the final report; native function calling and
+schema-constrained outputs, no fallback provider) · DuckDuckGo + arXiv · trafilatura + BM25 for page text · Streamlit ·
 Langfuse tracing · pytest/mypy/ruff in CI. Source: github.com/charan-ravikumar/Multi-Agent-AI-Research-Analyst
 
 ### Good to know

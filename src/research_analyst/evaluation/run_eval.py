@@ -71,7 +71,7 @@ async def main() -> int:
     base, other = configs[0], configs[-1]
     agg = H.aggregate(rows, base, other) if len(configs) > 1 else {}
     from research_analyst.observability import prompt_store
-    meta = {"prompt_label": settings.langfuse_prompt_label, "prompts_used": prompt_store.used(), "groq_models": f"{settings.groq_fast_model} / {settings.groq_strong_model}", "judge_model": settings.judge_model,
+    meta = {"prompt_label": settings.langfuse_prompt_label, "prompts_used": prompt_store.used(), "models": f"{settings.gemini_fast_model} / {settings.gemini_strong_model}", "judge_model": settings.judge_model,
             "new_tokens": cached.miss_tokens, "llm_cache_hits": cached.hits, "llm_cache_misses": cached.misses}
     H.RESULTS.mkdir(exist_ok=True)
     out = Path(a.out) if a.out else H.RESULTS / f"{time.strftime('%Y%m%d-%H%M%S')}.json"

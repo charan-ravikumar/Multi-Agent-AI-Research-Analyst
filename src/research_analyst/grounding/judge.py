@@ -88,7 +88,7 @@ def parse_verdicts(raw: str | None, expected_ids: set[int], valid_refs: dict[int
         if not isinstance(it, dict):
             continue
         try:
-            cid = int(it.get("id"))
+            cid = int(it.get("id") or 0)
         except (TypeError, ValueError):
             continue
         verdict = str(it.get("verdict", "")).strip().lower()

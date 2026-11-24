@@ -36,6 +36,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | Self-critique / reflection | Critic ⇄ Reviser (`agents/critic.py`, `nodes/debate.py`) | opt-in; measured not worth it by default |
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
+| Gemini-only + native tools + structured outputs | `llm/`, `agents/react_search.py`, `llm/schemas.py` | branch `feature/gemini-only-native-tools`, awaiting confirmation |
 | Prompt versioning | `observability/prompt_store.py` (Langfuse) | merged to `main` 2026-11-24 on your confirmation; **not yet run against real Langfuse** |
 
 ## 3. Timeline
@@ -157,6 +158,41 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** Why keep a local fallback? How do you stop a prompt edit in a UI from breaking production? How would you A/B two prompt versions and attribute the difference? What's the difference between tagging a trace with a prompt hash and linking it to a managed version? Where do prompts belong — code or a registry — and what are the trade-offs (review, rollback, drift, latency)?
 
+### 2026-11-24 — Feature branch `feature/gemini-only-native-tools`: Gemini-only, native function calling, structured outputs **(on branch, awaiting your confirmation)**
+
+**Context [DECIDED — your instructions]:** remove Groq; use only Gemini; **no fallback**; `gemini-3.5-flash-lite` for most agents and `gemini-3.8-flash` only where needed; function calling through the API; structured outputs for all tools/functions. Your limits: 3.8 Flash = 5 RPM / 250K TPM / 20 RPD; 3.5 Flash Lite = 15 RPM / 250K TPM / 500 RPD.
+
+**What was built**
+- **LLM layer rewritten** (`llm/`): Groq client and the provider-fallback chain deleted. `client.py` maps tier→model, enforces limits (waits for RPM/TPM; **persisted per-day counter** that raises `DailyQuotaExceeded` instead of burning retries; resets midnight Pacific), retries 429/5xx with jittered backoff, and a per-model circuit breaker that now **fails fast** (no other model to try). `gemini_client.py` is the only module that talks to the API.
+- **Which agents use the strong model [INFERRED]:** only the **Writer** (`GEMINI_STRONG_AGENTS=writer`, configurable). 20 RPD ⇒ ~10-20 runs/day at 1-2 Writer calls per run; adding more agents would exhaust it quickly. Everything else (planner, reader, synthesizer, critic, query rewrite, ReAct, grounding judge) runs on Flash Lite.
+- **Structured outputs** (`llm/schemas.py` + `BaseAgent.response_schema`): Pydantic schemas passed as Gemini `response_schema` for planner, reader, synthesizer (+revision), critic, query rewrite, grounding judge, eval judge. The API guarantees the **shape**; the agents still validate the **meaning** (verdict ids belong to the batch, source ids valid, sub-question count) and keep the corrective retry. The Writer stays plain Markdown by design.
+- **Native function calling for ReAct** (`agents/react_search.py` rewritten, `llm/tools.py`): tools declared as function declarations with JSON-schema parameters, `FunctionCallingConfig(mode=ANY)` so the model can only answer with a tool call, automatic execution disabled, every tool has a required `thought` argument (keeps it ReAct), the model's own turn is passed back untouched (Gemini 3 **thought signatures**), parallel calls in one turn are all answered (capped at 3). The earlier JSON-in-text action parser was removed; `validate_call` re-checks arguments as defence in depth.
+- Preflight now checks Gemini model names (`check_models`); UI, secrets, scripts, Docker/requirements (groq removed from `pyproject.toml`/`uv.lock`), README/ARCHITECTURE/.env.example updated. Tests: 343 passing offline, ruff + mypy clean.
+
+**Technical decisions** (INFERRED unless stated)
+
+| Decision | Why | Alternative & trade-off |
+|---|---|---|
+| Client-side RPM/TPM waiting + persisted RPD counter | Free tiers fail with 429s that retries can't fix (daily cap); fail early with an actionable message | Rely on 429 handling = simpler, wastes quota and time |
+| Count every retry attempt against RPD | Pessimistic but safe; Google may or may not count 5xx | Count only successes = risk of exceeding the real limit |
+| Strong model for the Writer only | Final report quality matters most; fewest calls | Planner/Synthesizer on strong = better reasoning, quota gone fast |
+| `thinking_level` setting, default unset | Probe showed `thinking_budget=0` is **rejected (400)** by Gemini 3.x; level is accepted on Flash Lite | Always set a level = fewer thinking tokens, but unverified on 3.8 |
+| Judge defaults to the fast model | 3.8 quota is too scarce; but the judge is now **the same model family as the generator** → possible self-preference bias | Use 3.8 as judge = more independent only in size, not family |
+| Circuit breaker fails fast with no fallback | Avoid every parallel branch paying full retries during an outage | Keep retrying = slower failures |
+| Writer output not schema-constrained | A single long Markdown string gains nothing from JSON | Wrap in `{report: "..."}` = escaping overhead |
+
+**Live verification (3 probes + smoke test on your real key) [MEASURED]:** structured output with a Pydantic schema works on Flash Lite; native function calling in mode ANY works and returns thought signatures; the full Planner agent returned 4 sub-questions via structured output; a real ReAct run executed 3 tool-call turns and collected 28 candidates. **`gemini-3.8-flash` returned 503/504 on every attempt I made** (about 9 requests, ~3 of your 20 daily requests used by the smoke test's retries plus earlier probes) — so the **Writer on 3.8 is NOT verified live**. This looked like provider overload, not a code bug, but treat it as an open risk: with no fallback, a persistent 3.8 outage fails the run. Mitigation: `GEMINI_STRONG_AGENTS=` (empty) runs everything on Flash Lite.
+
+**Challenges / lessons**
+- `thinking_budget=0` (used for Gemini 2.5) 400s on Gemini 3 models → switched to an optional `thinking_level`; found by a live probe, not docs.
+- Function-calling history can't be rebuilt from text: with Gemini 3 the model's turn (thought signatures) must be returned unchanged, so the conversation history is provider-native and opaque (`llm/tools.py`).
+- Evaluation harness: ReAct model turns are **not LLM-cached** (provider objects), only searches/pages are replayed → ReAct A/B is repeatable in evidence, not in model decisions.
+- Lost provider independence: the earlier eval used a different-family judge (qwen). Now generator and judge are the same family — a limitation to state in interviews.
+
+**Honest limits:** README measurements (88% cited claims etc.) are from the Groq era and are **not re-measured** on Gemini; quality of Flash Lite for synthesis is unproven; the RPD counter is local (not shared between machines).
+
+**Interview questions this adds:** Native tool calling vs prompting for JSON: what does the API guarantee and what must you still validate? What is `mode=ANY` and why use it? What are thought signatures and what breaks if you drop them? How do you design for hard free-tier limits (RPM/TPM/RPD) — wait, fail fast, or degrade? Why no fallback provider, and what are the risks? What do you lose when generator and judge share a model family? Structured output (constrained decoding) vs parse-and-retry: trade-offs?
+
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.
 2. **A/B:** `run_eval --queries 5 --configs no_debate,react` (≥3 runs each for variance); report faithfulness, completeness, tokens, calls, time.
@@ -197,7 +233,7 @@ cheapest credibility win was a real A/B. Hence this work.
 ## 6. Open questions for you (I won't assume — please answer when convenient)
 
 1. Phase 0 above is reconstructed from git history. Which parts did **you** design vs. extend? (Needed so the "decided vs inferred" labels are right.)
-2. Which paid provider/model will you use next week? (Affects: native tool-calling for ReAct, judge model choice, price table `LLM_PRICE_PER_1M_TOKENS`.)
+2. ~~Which paid provider/model?~~ Superseded 2026-11-24: you chose Gemini-only (Flash Lite + 3.8 Flash). Still open: will the paid plan lift the RPD limits, and should `GEMINI_RATE_LIMITS` be updated?
 3. Should the eval set grow beyond the 5 golden queries (3 of which have never been run)?
 4. Do you want the work committed on `professionalize-agent` (I haven't committed anything)?
 

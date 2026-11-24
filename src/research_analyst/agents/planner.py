@@ -8,7 +8,7 @@ from research_analyst.observability.prompt_store import resolve
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import validate_query
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import PlannerOut
 from research_analyst.models import ResearchPlan
 from research_analyst.agents.prompts import planner as prompts
 
@@ -27,8 +27,7 @@ class PlannerAgent(BaseAgent):
     """
 
     name = "planner"
-    tier = ModelTier.STRONG
-    json_mode = True
+    response_schema = PlannerOut
 
     async def run(self, state: StateLike) -> dict[str, Any]:
         query: str = validate_query(state["query"])

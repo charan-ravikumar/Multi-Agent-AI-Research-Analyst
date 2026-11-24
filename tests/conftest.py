@@ -16,7 +16,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 _TMP = tempfile.mkdtemp(prefix="research-analyst-tests-")
-os.environ["GROQ_API_KEY"] = "test-groq-key"
 os.environ["GEMINI_API_KEY"] = "test-gemini-key"
 os.environ["LOG_FILE"] = os.path.join(_TMP, "agent_traces.jsonl")
 os.environ["LANGFUSE_PUBLIC_KEY"] = ""      # never send test traces, even if .env has real keys
@@ -28,7 +27,10 @@ os.environ["LLM_PRICE_PER_1M_TOKENS"] = ""
 os.environ["QUERY_REWRITE"] = "off"             # evidence-quality tests opt in explicitly
 os.environ["ARXIV_ENABLED"] = "false"
 os.environ["DEBATE_MAX_ROUNDS"] = "3"          # review loop is opt-in in production defaults; tests exercise it
-os.environ["GROQ_FALLBACK_MODEL"] = ""        # unit tests of the client opt in explicitly
+os.environ["GEMINI_RATE_LIMITS"] = "{}"           # unit tests of the client opt in explicitly
+os.environ["LLM_QUOTA_FILE"] = os.path.join(_TMP, "llm_quota.json")
+os.environ["GEMINI_STRONG_AGENTS"] = "writer"
+os.environ["JUDGE_MODEL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"   # unreachable on purpose
 
 import fakeredis  # noqa: E402
@@ -78,6 +80,7 @@ def reset_llm_state():
     _ax._cooldown_until = 0.0
     _ax._last_call = 0.0
     client._breaker.reset()
+    Path(os.environ["LLM_QUOTA_FILE"]).unlink(missing_ok=True)      # daily-request counter is per test
     client._tpm.reset()
 
 

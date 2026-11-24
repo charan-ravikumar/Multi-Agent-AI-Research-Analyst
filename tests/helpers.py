@@ -65,11 +65,11 @@ class FakeLLM:
         }.get(role, "{}")
 
     def __call__(self, prompt, *, tier=None, system=None, temperature=None, max_tokens=None,
-                 return_usage=False, json_mode=False, prefer=None, groq_model=None):
+                 return_usage=False, json_mode=False, schema=None, model=None):
         role = self.role_of(prompt)
         self.calls[role] = self.calls.get(role, 0) + 1
         self.prompts.append((role, prompt))
-        self.kwargs.append((role, {"json_mode": json_mode, "max_tokens": max_tokens, "prefer": prefer}))
+        self.kwargs.append((role, {"json_mode": json_mode, "max_tokens": max_tokens, "schema": schema, "model": model, "tier": tier}))
         fn = self.overrides.get(role)
         out = fn(prompt, self.calls[role]) if fn else self._default(role)
         usage = {"provider": "fake", "model": "fake", "prompt_tokens": 1, "completion_tokens": 1,

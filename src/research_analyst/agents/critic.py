@@ -7,7 +7,7 @@ from research_analyst.grounding.citations import analyze, build_evidence
 from research_analyst.grounding.gaps import curate_gaps, gap_texts
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.config import settings
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import CriticOut
 from research_analyst.agents.prompts import critic as prompts
 
 # ── prompts ───────────────────────────────────────────────────────────────────
@@ -40,14 +40,11 @@ class CriticAgent(BaseAgent):
     """
 
     name = "critic"
-    tier = ModelTier.STRONG
-    json_mode = True
+    response_schema = CriticOut
 
     def __init__(self) -> None:
         super().__init__()
         # A different model family than the (Groq) Synthesizer reduces shared blind spots.
-        self.prefer_provider = "gemini" if settings.critic_prefer_gemini else None
-        self.groq_model = settings.critic_model or None
 
     async def run(self, state: StateLike) -> dict:
         session_id: str = state["session_id"]

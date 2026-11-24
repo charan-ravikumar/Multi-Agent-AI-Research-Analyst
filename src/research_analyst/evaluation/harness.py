@@ -9,8 +9,9 @@ Design (all aimed at *cheap, repeatable, honest* comparisons on free-tier quotas
                    pipeline (e.g. debate on/off share planner+reader+synthesizer) share those
                    calls: they cost quota once and are bit-identical.
   * metrics        deterministic (fact fidelity vs source text, citation stats, usage) +
-                   an LLM judge from a DIFFERENT model family than the generator (Gemini
-                   judging Groq output); the result records whether the judge really was Gemini.
+                   an LLM judge.  The project is Gemini-only, so the judge is normally the same model FAMILY as the
+                   generator (self-preference bias is possible); the result records whether it was independent.
+  * the ReAct config's model turns (native function calling) are NOT cached — only its searches/pages are replayed.
 
 Limits you must keep in mind when reading results:
   * the judge sees the extracted facts for the cited sources, not the live web: it measures
@@ -33,6 +34,7 @@ from collections.abc import Callable
 
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
+from research_analyst.llm.schemas import EvalJudgeOut
 from research_analyst.observability.usage import tracker
 from research_analyst.models import ResearchState
 from research_analyst.models.search_result import SearchResult
@@ -126,9 +128,9 @@ class CachedLLM:
         self.miss_tokens = 0
 
     def __call__(self, prompt: Any, *, tier: Any = None, system: Any = None, temperature: Any = None, max_tokens: Any = None,
-                 return_usage: bool = False, json_mode: bool = False, prefer: Any = None, groq_model: Any = None) -> Any:
-        extra = [groq_model] if groq_model else []        # keeps keys of older cache entries valid
-        key = _h(prompt, system, getattr(tier, "value", tier), temperature, max_tokens, json_mode, prefer, *extra)
+                 return_usage: bool = False, json_mode: bool = False, schema: Any = None, model: Any = None) -> Any:
+        key = _h(prompt, system, getattr(tier, "value", tier), temperature, max_tokens, json_mode,
+                 getattr(schema, "__name__", None), model)
         p = self.dir / f"{key}.json"
         if p.exists():
             d = json.loads(p.read_text("utf-8"))
@@ -136,8 +138,8 @@ class CachedLLM:
             text, usage = d["text"], d["usage"]
         else:
             kw = {k: v for k, v in {"tier": tier, "system": system, "temperature": temperature,
-                                    "max_tokens": max_tokens, "prefer": prefer,
-                                    "groq_model": groq_model}.items() if v is not None}
+                                    "max_tokens": max_tokens, "schema": schema,
+                                    "model": model}.items() if v is not None}
             text, usage = self.inner(prompt, return_usage=True, json_mode=json_mode, **kw)
             if usage.get("finish_reason") != "length":       # never cache truncated answers
                 p.write_text(json.dumps({"text": text, "usage": usage}), "utf-8")
@@ -190,7 +192,7 @@ def _family(model: str | None) -> str:
 
 def _independent(judge_model: str | None) -> bool:
     """Judge counts as independent only if its model FAMILY differs from every generator model."""
-    gens = {_family(settings.groq_fast_model), _family(settings.groq_strong_model)}
+    gens = {_family(settings.gemini_fast_model), _family(settings.gemini_strong_model)}
     return bool(judge_model) and _family(judge_model) not in gens
 
 
@@ -222,7 +224,7 @@ def judge_report(state: dict, generate: Callable | None = None) -> dict:
     user = (f"Research question: {state['query']}\n\n<claims>\n{block}\n</claims>\n\n"
             f"<report>\n{state['final_report'][:6000]}\n</report>")
     text, usage = generate([{"role": "system", "content": _JUDGE_SYSTEM}, {"role": "user", "content": user}],
-                           return_usage=True, json_mode=True, groq_model=settings.judge_model, max_tokens=1500)
+                           return_usage=True, json_mode=True, schema=EvalJudgeOut, model=settings.judge_model or None, max_tokens=1500)
     if usage.get("finish_reason") == "length":
         raise ValueError("judge output truncated (finish_reason=length); raise max_tokens")
     data = parse_json(text)
@@ -271,7 +273,7 @@ def collect_metrics(state: dict, judge: dict, wall_s: float) -> dict:
 def _initial_state(query: str) -> ResearchState:
     return ResearchState(
         session_id=str(uuid.uuid4()), query=query, research_plan=None, sub_questions=[], search_results=[],
-        failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[], unresolved_gaps=[], gap_items=[],
+        react_traces=[], failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[], unresolved_gaps=[], gap_items=[],
         draft=[], final_report="", iteration=0, routing_history=[], auto_approve_plan=True)
 
 
@@ -344,7 +346,7 @@ def to_markdown(agg: dict, base: str, other: str, meta: dict) -> str:
     names = list(cfgs)
     lines = ["# Evaluation results", "",
              f"- queries: **{agg['n_queries']}** (each run once; paired comparison `{other}` vs `{base}`)",
-             f"- generator: Groq `{meta.get('groq_models')}`; judge: `{meta.get('judge_model')}`; "
+             f"- generator: `{meta.get('models')}`; judge: `{meta.get('judge_model')}`; "
              f"judge model family differs from the generator in {agg['judge_independent_runs']}/{agg['total_runs']} runs",
              "- evidence: recorded search + page fixtures (identical across configs)", "",
              "| metric | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]

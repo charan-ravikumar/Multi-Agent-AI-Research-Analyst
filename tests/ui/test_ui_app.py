@@ -160,17 +160,22 @@ def test_a_cancelled_thread_routes_the_researching_page_to_the_stopped_screen():
     assert not at.exception and at.session_state["phase"] == "cancelled"
 
 
-def test_start_page_warns_when_a_configured_model_was_retired(monkeypatch):
+def test_start_page_blocks_when_a_configured_model_is_unavailable(monkeypatch):
     from research_analyst.llm import preflight
     from research_analyst.llm.preflight import ModelCheck
-    monkeypatch.setattr(preflight, "check_groq_models", lambda force=False: ModelCheck(
-        verified=True, available=("qwen/qwen3.8-27b",), missing=("openai/gpt-oss-120b",), suggestions=("qwen/qwen3.8-27b",)))
     from research_analyst.config import settings
     monkeypatch.setattr(settings, "gemini_api_key", "x")
+    monkeypatch.setattr(preflight, "check_models", lambda force=False: ModelCheck(
+        verified=True, available=("gemini-3.5-flash-lite",), missing=("gemini-3.8-flash",), suggestions=("gemini-3.5-flash-lite",)))
     at = _app().run()
-    assert any("openai/gpt-oss-120b" in w.value and "20 requests/day" in w.value for w in at.warning)
+    assert any("gemini-3.8-flash" in e.value and "no fallback" in e.value for e in at.error)
+    start = next(b for b in at.button if b.label.startswith("Start research"))
+    assert start.disabled
+
+
+def test_start_page_without_a_key_blocks_starting(monkeypatch):
+    from research_analyst.config import settings
     monkeypatch.setattr(settings, "gemini_api_key", "")
     at = _app().run()
-    assert any("cannot run" in e.value for e in at.error)
-    start = next(b for b in at.button if b.label.startswith("Start research"))
-    assert start.disabled                                  # no usable provider: starting is blocked
+    assert any("No LLM API key" in e.value and "GEMINI_API_KEY" in e.value for e in at.error)
+    assert next(b for b in at.button if b.label.startswith("Start research")).disabled

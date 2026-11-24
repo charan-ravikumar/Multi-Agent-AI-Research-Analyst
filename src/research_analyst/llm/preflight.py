@@ -1,13 +1,9 @@
 """
-llm/preflight.py — fail fast when a configured model is no longer available.
+llm/preflight.py — fail fast when a configured Gemini model is not available to this key.
 
-Why: Groq retired the Llama models this project originally used.  Every call then got a 404, the
-client treated it as "provider unavailable" and silently routed everything to the Gemini fallback —
-whose free tier allows only ~20 requests/day.  The run "worked" for a while and then died, with an
-error far from the cause.  This asks the provider which models exist, once per 10 minutes, and turns
-that failure into an explicit, early, actionable message.
-
-Never blocks on its own failure: if the provider can't be reached the check is simply "unverified".
+With no fallback provider, a retired or mistyped model name would fail every call.  This asks the API which models
+exist (cached 10 minutes) and turns that into an early, actionable message.  It never blocks on its own failure: if
+the API can't be reached the check is simply "unverified".
 """
 from __future__ import annotations
 
@@ -16,17 +12,15 @@ from dataclasses import dataclass
 
 from research_analyst.config import settings
 
-_NON_CHAT = ("whisper", "guard", "orpheus", "tts", "embed", "moderation")
 _TTL_SECONDS = 600.0
 
 
 @dataclass(frozen=True)
 class ModelCheck:
-    verified: bool                       # False: provider unreachable / key missing -> do not block
+    verified: bool                       # False: API unreachable / key missing -> do not block
     available: tuple[str, ...] = ()
-    missing: tuple[str, ...] = ()        # configured primary models (fast/strong) that are NOT available
-    fallback_missing: bool = False       # the second Groq model is configured but gone
-    suggestions: tuple[str, ...] = ()    # chat-capable models that ARE available
+    missing: tuple[str, ...] = ()        # configured models that are NOT available
+    suggestions: tuple[str, ...] = ()    # text-generation models that ARE available
     error: str = ""
 
     @property
@@ -38,30 +32,31 @@ _cache: tuple[float, ModelCheck] | None = None
 
 
 def _list_models() -> list[str]:
-    from research_analyst.llm import groq_client  # noqa: PLC0415
-    client = groq_client._get_client()
-    return sorted(m.id for m in client.models.list().data)
+    from research_analyst.llm import gemini_client  # noqa: PLC0415
+    out = []
+    for m in gemini_client._get_client().models.list():
+        if "generateContent" in (m.supported_actions or []):
+            out.append((m.name or "").removeprefix("models/"))
+    return sorted(out)
 
 
-def check_groq_models(force: bool = False) -> ModelCheck:
+def configured_models() -> list[str]:
+    return list(dict.fromkeys(m for m in (settings.gemini_fast_model, settings.gemini_strong_model, settings.judge_model) if m))
+
+
+def check_models(force: bool = False) -> ModelCheck:
     global _cache
     if not force and _cache and time.monotonic() - _cache[0] < _TTL_SECONDS:
         return _cache[1]
-    if not settings.groq_api_key:
-        result = ModelCheck(verified=False, error="GROQ_API_KEY is not set")
+    if not settings.gemini_api_key:
+        result = ModelCheck(verified=False, error="GEMINI_API_KEY is not set")
     else:
         try:
             available = _list_models()
-            configured = [settings.groq_fast_model, settings.groq_strong_model]
-            missing = tuple(dict.fromkeys(m for m in configured if m not in available))
-            fb = settings.groq_fallback_model
+            missing = tuple(m for m in configured_models() if m not in available)
             result = ModelCheck(
-                verified=True,
-                available=tuple(available),
-                missing=missing,
-                fallback_missing=bool(fb) and fb not in available,
-                suggestions=tuple(m for m in available if not any(x in m.lower() for x in _NON_CHAT)),
-            )
+                verified=True, available=tuple(available), missing=missing,
+                suggestions=tuple(m for m in available if "tts" not in m and "image" not in m and "transcribe" not in m))
         except Exception as exc:  # noqa: BLE001 — never let the check itself break the app
             result = ModelCheck(verified=False, error=f"{type(exc).__name__}: {str(exc)[:120]}")
     _cache = (time.monotonic(), result)
@@ -69,23 +64,20 @@ def check_groq_models(force: bool = False) -> ModelCheck:
 
 
 def describe(check: ModelCheck) -> tuple[str, str]:
-    """-> (level, message) with level in {"ok", "warning", "error"}; message is user-presentable."""
+    """-> (level, message) with level in {"ok", "error"}; message is user-presentable."""
     if not check.verified or check.ok:
-        if check.verified and check.fallback_missing:
-            return "warning", f"The fallback Groq model {settings.groq_fallback_model!r} is no longer available; set GROQ_FALLBACK_MODEL."
         return "ok", ""
-    pick = ", ".join(check.suggestions[:4]) or "none found"
-    base = (f"Configured Groq model(s) not available for this key: {', '.join(check.missing)}. "
-            f"Available chat models: {pick}. Set GROQ_FAST_MODEL / GROQ_STRONG_MODEL accordingly.")
-    if settings.gemini_api_key:
-        return "warning", base + " Until fixed, calls fall back to Gemini, whose free tier allows only ~20 requests/day."
-    return "error", base + " No Gemini fallback key is configured, so research cannot run."
+    pick = ", ".join(check.suggestions[:6]) or "none found"
+    return "error", (f"Configured Gemini model(s) not available for this key: {', '.join(check.missing)}. "
+                     f"Available text models: {pick}. Set GEMINI_FAST_MODEL / GEMINI_STRONG_MODEL accordingly. "
+                     "There is no fallback provider, so research cannot run until this is fixed.")
 
 
 def assert_models_available() -> None:
     """For scripts/evaluation: raise before spending any quota if a configured model is gone."""
-    level, message = describe(check_groq_models())
-    if level in ("warning", "error") and check_groq_models().missing:
+    check = check_models()
+    level, message = describe(check)
+    if level == "error":
         raise RuntimeError(message)
 
 

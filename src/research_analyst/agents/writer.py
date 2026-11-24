@@ -5,7 +5,6 @@ from typing import Any
 
 from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.observability.prompt_store import resolve
-from research_analyst.llm import ModelTier
 from research_analyst.grounding.gaps import COVERAGE, curate_gaps, gap_texts, make_item
 from research_analyst.observability.progress import progress
 from research_analyst.safety.sanitize import sanitize_report_markdown
@@ -47,7 +46,6 @@ Reads  : state["draft"]  (List[str] — one synthesis section per sub-question),
     """
 
     name = "writer"
-    tier = ModelTier.STRONG
     budget_exempt = True    # a report must still be produced when the budget is spent
     # The report asks for six sections incl. a long analysis; 2048 tokens was ~93% used
     # for a 5-sub-question run in the logs, so truncation is a real risk.

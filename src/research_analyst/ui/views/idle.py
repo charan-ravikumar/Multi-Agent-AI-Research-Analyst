@@ -14,25 +14,22 @@ def set_query(q: str) -> None:
 
 def missing_provider_keys() -> list[str]:
     from research_analyst.config import settings  # noqa: PLC0415
-    return [name for name, val in (("GROQ_API_KEY", settings.groq_api_key),
-                                   ("GEMINI_API_KEY", settings.gemini_api_key)) if not val]
+    return [name for name, val in (("GEMINI_API_KEY", settings.gemini_api_key),) if not val]
 
 
 def phase_idle() -> None:
     st.markdown("### What do you want to research?")
     missing = missing_provider_keys()
-    if len(missing) == 2:
+    if missing:
         st.error(
             "**No LLM API key is configured**, so research cannot run. In Streamlit Cloud open "
-            "*App → Settings → Secrets* and add `GROQ_API_KEY = \"...\"` (and optionally "
-            "`GEMINI_API_KEY`) as plain top-level entries, then reboot the app.",
+            "*App → Settings → Secrets* and add `GEMINI_API_KEY = \"...\"` as a plain top-level entry, "
+            "then reboot the app.",
             icon="🔑",
         )
-    elif missing:
-        st.warning(f"{missing[0]} is not set; the fallback provider is unavailable.", icon="⚠")
-    blocked = len(missing) == 2
+    blocked = bool(missing)
     from research_analyst.llm import preflight  # noqa: PLC0415
-    level, message = preflight.describe(preflight.check_groq_models())
+    level, message = preflight.describe(preflight.check_models())
     if level == "error":
         st.error(message, icon="🚫")
         blocked = True

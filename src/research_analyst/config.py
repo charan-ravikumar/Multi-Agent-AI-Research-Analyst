@@ -19,34 +19,29 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── LLM — API keys ────────────────────────────────────────────────────────
-    # Keys default to "" so the package imports (tests, CI) without credentials;
-    # the provider clients raise a clear error on first real use if one is missing.
-    groq_api_key: str = ""
-    # Groq is the primary LLM provider. Gemini is the fallback via the new
-    # google-genai SDK (2.x).  The old google-generativeai SDK was deprecated
-    # on 2025-11-30 and caused an ImportError (missing grpc_asyncio transport)
-    # whenever the fallback was triggered.  Migrated to google-genai==2.10.0;
-    # confirmed working with gemini-2.5-flash.  Keys are validated lazily at first call.
+    # ── LLM — Gemini only (no fallback provider) ──────────────────────────────
+    # Everything goes through the Gemini API.  A failing call is retried (429/5xx) and then raises; there is no
+    # second provider to hide an outage.  Keys default to "" so the package imports without credentials.
     gemini_api_key: str = ""
-
-    # ── LLM — model names ─────────────────────────────────────────────────────
-    groq_fast_model: str = "openai/gpt-oss-20b"         # Reader (llama-3.1-8b-instant was retired for this key)
-    groq_strong_model: str = "openai/gpt-oss-120b"      # Planner, Synthesizer, Critic, Writer
-    # gpt-oss models are reasoning models: reasoning tokens count against max_tokens and TPM.
-    # "low" keeps extraction/synthesis cheap; applied only to openai/gpt-oss-* models.
-    groq_reasoning_effort: str = "low"
-    # Second Groq model tried (own quota) when the primary model fails with an HTTP status error
-    # (429/404/5xx) BEFORE falling back to Gemini, whose free tier is only ~20 requests/day.
-    # Empty disables.  Different model family from the primary, so it also diversifies failures.
-    groq_fallback_model: str = "qwen/qwen3.8-27b"
-    # Independent judge for evaluation and optional model for the Critic (empty = tier default).
-    judge_model: str = "qwen/qwen3.8-27b"
-    critic_model: str = ""
-    # Gemini 2.5 Flash is a "thinking" model: hidden reasoning tokens count against max_output_tokens
-    # and truncated JSON answers in live tests.  0 disables thinking (Flash supports it).
-    gemini_thinking_budget: int = 0
-    gemini_model: str = "gemini-2.5-flash"               # fallback for all tiers
+    # Two models: a cheap high-volume one for most agents, a stronger one only where reasoning quality matters.
+    gemini_fast_model: str = "gemini-3.5-flash-lite"     # 15 RPM, 250K TPM, 500 RPD on the free tier
+    gemini_strong_model: str = "gemini-3.8-flash"        # 5 RPM, 250K TPM, 20 RPD on the free tier
+    # Comma-separated agent names that use the STRONG model.  Every other agent uses the fast model.  The strong model
+    # has only 20 requests/day, so the default is the Writer alone (1-2 calls per run).
+    gemini_strong_agents: str = "writer"
+    # Model for the LLM judges (grounding judge + evaluation judge); empty = the fast model.
+    judge_model: str = ""
+    # Free-tier limits per model, JSON: {"model": {"rpm": n, "tpm": n, "rpd": n}}.  Calls wait for RPM/TPM room and
+    # fail fast with a clear error once RPD is spent (instead of burning retries on 429s).  {} disables limiting.
+    gemini_rate_limits: str = (
+        '{"gemini-3.8-flash": {"rpm": 5, "tpm": 250000, "rpd": 20}, '
+        '"gemini-3.5-flash-lite": {"rpm": 15, "tpm": 250000, "rpd": 500}}'
+    )
+    # Where the per-day request counter is kept (resets at midnight Pacific, like Google's quota).
+    llm_quota_file: str = "logs/llm_quota.json"
+    # Gemini 3 models take a thinking LEVEL (thinking_budget=0 is rejected): "", "minimal", "low", "medium", "high".
+    # Empty = the model default.  Thinking tokens count against max_tokens, so lower it if answers get truncated.
+    gemini_thinking_level: str = ""
 
     # ── LLM — generation defaults ─────────────────────────────────────────────
     llm_temperature: float = 0.2
@@ -63,9 +58,6 @@ class Settings(BaseSettings):
     # for the cooldown instead of making every call pay the full retry cost.
     llm_breaker_threshold: int = 3
     llm_breaker_cooldown_seconds: float = 60.0
-    # Sliding-window tokens-per-minute budget per model (prompt estimate + max_tokens);
-    # 0 disables.  Set just under your provider TPM limit (Groq free 8B: 6000).
-    llm_tpm_budget: int = 0
     # ── Per-run accounting ─────────────────────────────────────────────────────
     # Hard stop for LLM spend per research run (prompt+completion tokens, summed over
     # all calls).  0 disables.  When hit: branches fail (isolated), the debate stops
@@ -76,9 +68,6 @@ class Settings(BaseSettings):
     llm_price_per_1m_tokens: str = ""
     # ── Input safety ───────────────────────────────────────────────────────────
     max_query_chars: int = 500
-    # Run the Critic on Gemini first (different model family from the Groq
-    # Synthesizer -> fewer shared blind spots); falls back to Groq.
-    critic_prefer_gemini: bool = False
     # Maximum Critic-Synthesizer debate rounds before forced resolution.
     # Capped at 3 to bound LLM cost.  Same hard-boundary pattern as the
     # searcher zero-results retry cap.
@@ -98,7 +87,7 @@ class Settings(BaseSettings):
     search_max_results: int = 10
     # ── Reader ────────────────────────────────────────────────────────────
     # Max number of concurrent LLM calls issued by the Reader when extracting
-    # facts from multiple search results in parallel. Keeps Groq RPM in check.
+    # facts from multiple search results in parallel. Keeps the RPM limit in check.
     reader_max_concurrent_llm_calls: int = 3
     # Max sources sent to the (batched) Reader per sub-question and the evidence
     # text budget per source, to stay inside free-tier TPM limits.
@@ -147,8 +136,8 @@ class Settings(BaseSettings):
     grounding_judge_batch_size: int = 6
     # ── Research planner ──────────────────────────────────────────────────────
     # Number of sub-questions the Planner must produce.  Each sub-question costs
-    # ~reader results + 1 synthesis call, so on the Groq free tier (6,000 TPM on
-    # the 8B model) raise these with care: real runs hit 429s at 5 x 5 results.
+    # ~reader results + 1 synthesis call, so on the free tier (15 RPM / 500 RPD for the fast model) raise these
+    # with care: every sub-question multiplies the number of LLM calls per run.
     planner_min_sub_questions: int = 4
     planner_max_sub_questions: int = 5
 
@@ -164,6 +153,11 @@ class Settings(BaseSettings):
     # Langfuse's own docs/site use LANGFUSE_BASE_URL (region-specific: cloud / us.cloud / jp.cloud ...).
     # It takes precedence over LANGFUSE_HOST when set.
     langfuse_base_url: str = ""
+
+    @property
+    def strong_agents(self) -> frozenset[str]:
+        """Names of the agents that use the STRONG (reasoning) model; everyone else uses the fast model."""
+        return frozenset(a.strip() for a in self.gemini_strong_agents.split(",") if a.strip())
 
     @property
     def langfuse_url(self) -> str:

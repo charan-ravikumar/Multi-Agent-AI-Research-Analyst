@@ -8,7 +8,7 @@ from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.config import settings
 from research_analyst.grounding import judge
 from research_analyst.grounding.verify import build_evidence_index, extract_claims
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import JudgeOut
 from research_analyst.observability.prompt_store import resolve
 from research_analyst.observability.usage import BudgetExceeded
 
@@ -25,13 +25,12 @@ class GroundingJudgeAgent(BaseAgent):
     """
 
     name = "grounding_judge"
-    tier = ModelTier.STRONG
-    json_mode = True
+    response_schema = JudgeOut
     max_tokens = 1200
 
     def __init__(self) -> None:
         super().__init__()
-        self.groq_model = settings.judge_model or None
+        self.model = settings.judge_model or None
 
     async def run(self, state: StateLike) -> dict[str, Any]:
         report = state.get("final_report", "")

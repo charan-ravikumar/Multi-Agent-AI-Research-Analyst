@@ -7,7 +7,7 @@ from research_analyst.agents.base import BaseAgent, StateLike
 from research_analyst.agents.react_search import ReactSearch, url_key as _url_key
 from research_analyst.config import settings
 from research_analyst.observability.usage import BudgetExceeded
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import RewriteOut
 from research_analyst.models.search_result import SearchResult
 from research_analyst.retrieval.arxiv import fetch_pdf_text
 from research_analyst.retrieval.arxiv import relevant as arxiv_relevant
@@ -43,9 +43,8 @@ class SearcherAgent(BaseAgent):
     """
 
     name = "searcher"
-    tier = ModelTier.FAST        # only used for the optional query-rewrite call
-    json_mode = True
-    max_tokens = 300             # query rewrite needs ~100; a ReAct step (thought + action) a bit more
+    response_schema = RewriteOut      # the optional query-rewrite call; ReAct steps use native function calling
+    max_tokens = 400             # query rewrite needs ~100; a ReAct tool-call turn a bit more
 
     async def run(self, state: StateLike) -> dict[str, Any]:
         sub_question = state.get("current_sub_question", "").strip()

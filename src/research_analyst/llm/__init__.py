@@ -1,18 +1,16 @@
 """
-llm — public LLM interface for agents
+llm — public LLM interface for agents (Gemini only, no fallback provider)
 
 Agents import ONLY from this package:
 
     from research_analyst import llm
-    response = llm.generate("Explain AI")
+    text = llm.generate("Explain AI")
+    turn = llm.tool_turn(system, history, tools)          # native function calling
 
-    from research_analyst.llm import generate, ModelTier
-    response = generate("Summarise this", tier=ModelTier.FAST)
-
-Which provider(s) answer is an implementation detail hidden inside this
-package.  Agents must never import from llm.groq_client, llm.gemini_client,
-or llm.client directly.
+Agents must never import from llm.gemini_client or llm.client directly.
 """
-from research_analyst.llm.client import generate, ModelTier
+from research_analyst.llm.client import DailyQuotaExceeded, ModelTier, generate, model_for, tool_turn
+from research_analyst.llm.tools import ToolCall, ToolSpec, ToolTurn, tool_results_turn, user_turn
 
-__all__ = ["generate", "ModelTier"]
+__all__ = ["generate", "tool_turn", "ModelTier", "DailyQuotaExceeded", "model_for",
+           "ToolSpec", "ToolCall", "ToolTurn", "user_turn", "tool_results_turn"]

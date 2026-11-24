@@ -5,7 +5,7 @@ from research_analyst.evaluation import harness as H
 from tests.helpers import FakeLLM, make_search
 
 
-def _judge_llm(claims_ok=True, provider="groq", model="qwen/qwen3.8-27b"):
+def _judge_llm(claims_ok=True, provider="other", model="qwen/qwen3.8-27b"):   # default: a family different from Gemini
     def gen(prompt, *, return_usage=False, **kw):
         n = prompt[1]["content"].count("CLAIM:")
         verdicts = [{"id": i, "verdict": "supported" if claims_ok else "unsupported"} for i in range(1, n + 1)]
@@ -72,7 +72,7 @@ def test_run_one_scores_a_report_and_restores_settings(monkeypatch, tmp_path):
 def test_judge_flags_same_family_model_as_not_independent(monkeypatch):
     state = {"query": "q", "final_report": "## A\nMachine learning shortens early drug screening cycles a lot [1].\n## References\n[1] t - u",
              "references": [{"n": 1, "url": "https://a", "title": "t"}], "extracted_facts": []}
-    out = H.judge_report(state, _judge_llm(model="openai/gpt-oss-120b"))
+    out = H.judge_report(state, _judge_llm(provider="gemini", model="gemini-3.5-flash-lite"))
     assert out["judge_independent"] is False and out["unsupported_claims"] == 0
 
 
@@ -98,7 +98,7 @@ def test_aggregate_paired_deltas():
     assert (p["other_better"], p["other_worse"], p["ties"], p["n"]) == (1, 1, 1, 3) and p["mean_delta"] == 0.0
     u = agg["paired"]["uncited"]                                    # lower is better: 2 queries improved
     assert (u["other_better"], u["other_worse"]) == (2, 1)
-    md = H.to_markdown(agg, "no_debate", "debate", {"groq_models": "g", "judge_model": "j"})
+    md = H.to_markdown(agg, "no_debate", "debate", {"models": "g", "judge_model": "j"})
     assert "Paired difference" in md and "judge model family differs from the generator in 6/6" in md
 
 
@@ -117,7 +117,7 @@ def test_truncated_judge_is_an_error_not_a_zero_score():
     import pytest
 
     def truncated(prompt, *, return_usage=False, **kw):
-        return ('{"claims": [{"id": 1, "verdict": "supp', {"provider": "groq", "model": "qwen/qwen3.8-27b", "finish_reason": "length"})
+        return ('{"claims": [{"id": 1, "verdict": "supp', {"provider": "gemini", "model": "gemini-3.5-flash-lite", "finish_reason": "length"})
 
     state = {"query": "q", "final_report": "## A\nMachine learning shortens early drug screening cycles a lot [1].\n## References\n[1] t - u",
              "references": [{"n": 1, "url": "https://a", "title": "t"}], "extracted_facts": []}
@@ -144,4 +144,5 @@ def test_non_independent_judge_scores_are_excluded_from_aggregates():
 
 def test_family_helper():
     assert H._family("openai/gpt-oss-120b") == "openai" and H._family("gemini-2.5-flash") == "google"
-    assert H._independent("qwen/qwen3.8-27b") and not H._independent("openai/gpt-oss-20b")
+    assert H._independent("qwen/qwen3.8-27b") and H._independent("openai/gpt-oss-20b")
+    assert not H._independent("gemini-3.5-flash-lite") and not H._independent("gemini-3.8-flash")   # Gemini-only project

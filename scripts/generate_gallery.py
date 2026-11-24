@@ -45,7 +45,7 @@ async def generate(question: str) -> dict:
                                        settings.run_timeout_seconds)
         tracing.record_scores(state)
     return entry_from_state(state, question, time.time() - t0,
-                            {"fast": settings.groq_fast_model, "strong": settings.groq_strong_model})
+                            {"fast": settings.gemini_fast_model, "strong": settings.gemini_strong_model})
 
 
 async def main() -> int:

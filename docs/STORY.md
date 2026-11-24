@@ -7,6 +7,9 @@ The project is a LangGraph pipeline: plan → search → read → write a cited 
 ran it for real, on free API keys, and most of what I learned was about the edges between my code and the
 services it depends on. Eight things, roughly in the order they bit me.
 
+> **Note:** this write-up describes the earlier Groq-based setup. The project is now Gemini-only (see README); the lessons
+> about retired models, hidden reasoning tokens and free-tier limits still apply.
+
 ## 1. The model I built on was retired, and nothing told me
 
 Groq retired the Llama models the project was written against. Every call returned HTTP 404 "model does not

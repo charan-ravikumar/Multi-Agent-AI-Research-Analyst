@@ -153,7 +153,7 @@ def run_span(phase: str, session_id: str, query: str = "", tags: list[str] | Non
 
     Tagged with the environment and strong model so runs can be filtered/compared in Langfuse; callers add
     their own (e.g. "review:on")."""
-    base = [f"env:{settings.environment}", f"model:{settings.groq_strong_model}"]
+    base = [f"env:{settings.environment}", f"model:{settings.gemini_strong_model}"]
     with observation(f"run:{phase}", as_type="span", session_id=session_id, input={"query": query},
                      tags=[*base, *(tags or [])]) as h:
         try:

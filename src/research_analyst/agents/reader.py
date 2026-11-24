@@ -9,7 +9,7 @@ from research_analyst.observability.prompt_store import resolve
 from research_analyst.config import settings
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import clean_untrusted, safe_url
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import ReaderOut
 from research_analyst.models import Fact
 from research_analyst.models.search_result import SearchResult
 from research_analyst.retrieval.passages import tokenize
@@ -42,8 +42,7 @@ class ReaderAgent(BaseAgent):
     """
 
     name = "reader"
-    tier = ModelTier.FAST
-    json_mode = True
+    response_schema = ReaderOut
     max_tokens = 1500
 
     def __init__(self) -> None:

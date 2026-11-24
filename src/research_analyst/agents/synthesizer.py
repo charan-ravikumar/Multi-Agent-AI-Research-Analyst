@@ -15,7 +15,7 @@ from research_analyst.grounding.citations import normalize_citation_brackets as 
 from research_analyst.grounding.gaps import COVERAGE, OPEN_QUESTION, make_item
 from research_analyst.llm.json_parse import parse_json
 from research_analyst.safety.sanitize import clean_untrusted
-from research_analyst.llm import ModelTier
+from research_analyst.llm.schemas import ReviseOut, SynthOut
 from research_analyst.models import Fact
 from research_analyst.models.citation import Citation
 from research_analyst.agents.prompts import synthesizer as prompts
@@ -42,8 +42,7 @@ class SynthesizerAgent(BaseAgent):
     """
 
     name = "synthesizer"
-    tier = ModelTier.STRONG
-    json_mode = True
+    response_schema = SynthOut
     # Multi-paragraph JSON for several sections does not fit in the 2048 default
     # (a 2048-token truncation was observed in logs/agent_traces.jsonl).
     max_tokens = 3500
@@ -164,6 +163,7 @@ class SynthesizerAgent(BaseAgent):
 
         revised_sections, _err = await self.generate_parsed(
             messages, _parse_revision, state, retry_message=prompts.REVISION_RETRY, step="synth_revision_parse_error",
+            schema=ReviseOut,
         )
 
         if revised_sections is None:

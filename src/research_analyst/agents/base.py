@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import contextlib
+import json
 import time
 import traceback
 from abc import ABC, abstractmethod
@@ -29,6 +30,7 @@ from typing import Any, TypeVar
 from collections.abc import Mapping
 
 from research_analyst import llm
+from research_analyst.config import settings
 from research_analyst.observability import tracing
 from research_analyst.observability.logger import get_logger
 from research_analyst.observability import prompt_store
@@ -36,6 +38,7 @@ from research_analyst.observability.usage import estimate_cost, tracker
 from research_analyst.llm import ModelTier
 
 T = TypeVar("T")
+_DEFAULT: Any = object()   # sentinel: "use the agent's response_schema"
 
 # A node receives the (possibly branch-local) graph state and returns a PARTIAL update.
 StateLike = Mapping[str, Any]
@@ -47,22 +50,27 @@ class BaseAgent(ABC):
 
     Subclasses must set:
         name : str       — unique snake_case identifier, used in logs and Redis keys
-        tier : ModelTier — which LLM tier to use (default: STRONG)
+
+    The model tier is NOT declared by subclasses: ``tier`` is STRONG only for agents listed in
+    settings.gemini_strong_agents, FAST otherwise (see llm/client.py for what each tier maps to).
 
     Subclasses must implement:
         async def run(self, state: StateLike) -> dict[str, Any]
     """
 
     name: str = "base"
-    tier: ModelTier = ModelTier.STRONG
-    json_mode: bool = False          # ask the provider for a JSON object
+    json_mode: bool = False          # ask the provider for valid JSON (use response_schema for a guaranteed SHAPE)
+    response_schema: Any = None      # Pydantic model class: structured output enforced by the API
     max_tokens: int | None = None    # None -> settings.llm_max_tokens
-    prefer_provider: str | None = None   # e.g. "gemini" for the Critic
-    groq_model: str | None = None        # per-agent Groq model override (None = tier default)
+    model: str | None = None         # explicit model for this agent (None = chosen by tier)
     budget_exempt: bool = False          # True: never blocked by settings.token_budget_per_run (Writer)
 
     def __init__(self) -> None:
         self.log = get_logger(self.name)
+
+    @property
+    def tier(self) -> ModelTier:
+        return ModelTier.STRONG if self.name in settings.strong_agents else ModelTier.FAST
 
     # ── public interface ──────────────────────────────────────────────────────
 
@@ -132,41 +140,60 @@ class BaseAgent(ABC):
         *,
         system: str | None = None,
         state: StateLike,
+        schema: Any = _DEFAULT,
     ) -> tuple[str, dict]:
         """
-        Call the LLM with this agent's tier and auto-log the result.
-        Runs the blocking llm.generate() in a thread so it doesn't stall
-        the event loop when multiple agents execute concurrently.
-        Returns (text, usage) — usage is passed straight to log_call.
+        Call the LLM with this agent's tier and auto-log the result.  ``schema`` (a Pydantic model class) makes the
+        API return JSON of exactly that shape; it defaults to the agent's ``response_schema``, pass None to opt out.
+        Runs the blocking llm.generate() in a thread so it doesn't stall the event loop.
+        Returns (text, usage).
         """
+        schema = self.response_schema if schema is _DEFAULT else schema
+        sys_text = next((m["content"] for m in prompt if m.get("role") == "system"), "") if isinstance(prompt, list) else (system or "")
+
+        def call() -> tuple[str, dict]:
+            return llm.generate(prompt, tier=self.tier, system=system, return_usage=True,
+                                json_mode=self.json_mode or schema is not None, schema=schema,
+                                max_tokens=self.max_tokens, model=self.model)
+
+        return await self._instrumented(call, state=state, input_=prompt, sys_text=sys_text,
+                                        params={"json_mode": self.json_mode, "schema": getattr(schema, "__name__", None)})
+
+    async def llm_tool_turn(
+        self, history: list, tools: list[llm.ToolSpec], *, system: str, state: StateLike,
+    ) -> llm.ToolTurn:
+        """One native function-calling turn (the model must answer with a call to one of ``tools``), fully traced."""
+        def call() -> tuple[llm.ToolTurn, dict]:
+            turn = llm.tool_turn(system, history, tools, tier=self.tier, max_tokens=self.max_tokens, model=self.model)
+            return turn, turn.usage
+
+        turn, _usage = await self._instrumented(
+            call, state=state, input_=[{"role": "system", "content": system}], sys_text=system,
+            params={"tools": [t.name for t in tools]},
+            output_of=lambda t: json.dumps([{"name": c.name, "args": c.args} for c in t.calls]) + (f" | {t.text}" if t.text else ""))
+        return turn
+
+    async def _instrumented(
+        self, call: Callable[[], tuple[Any, dict]], *, state: StateLike, input_: Any, sys_text: str,
+        params: dict, output_of: Callable[[Any], str] = str,
+    ) -> tuple[Any, dict]:
+        """Budget check -> run ``call`` in a thread -> Langfuse generation, usage accounting, truncation warning."""
         session_id = state["session_id"]
         if not self.budget_exempt:
             tracker.check(session_id)          # raises BudgetExceeded when the run's budget is spent
         # A short hash of the system prompt identifies WHICH prompt text produced a trace, so a quality change
         # in Langfuse can be tied to a prompt edit (shown as the generation's "version").
-        sys_text = next((m["content"] for m in prompt if m.get("role") == "system"), "") if isinstance(prompt, list) else (system or "")
         prompt_version = hashlib.sha1(sys_text.encode("utf-8"), usedforsecurity=False).hexdigest()[:8] if sys_text else None
         managed = prompt_store.lookup(sys_text) if sys_text else None      # Langfuse-managed prompt this text came from
         link = {"prompt": managed.lf} if managed is not None and managed.lf is not None else {}
         with tracing.observation(
-            f"llm:{self.name}", as_type="generation", session_id=session_id, input=prompt, version=prompt_version, **link,
-            model_parameters={"json_mode": self.json_mode, "max_tokens": self.max_tokens or 0,
-                              "tier": self.tier.value},
+            f"llm:{self.name}", as_type="generation", session_id=session_id, input=input_, version=prompt_version, **link,
+            model_parameters={**params, "max_tokens": self.max_tokens or 0, "tier": self.tier.value},
         ) as gen:
-            text, usage = await asyncio.to_thread(
-                llm.generate,
-                prompt,
-                tier=self.tier,
-                system=system,
-                return_usage=True,
-                json_mode=self.json_mode,
-                max_tokens=self.max_tokens,
-                prefer=self.prefer_provider,
-                groq_model=self.groq_model,
-            )
+            result, usage = await asyncio.to_thread(call)
             cost = estimate_cost(usage)
             gen.update(
-                output=text,
+                output=output_of(result),
                 model=usage.get("model"),
                 usage_details={k: v for k, v in {
                     "input": usage.get("prompt_tokens"), "output": usage.get("completion_tokens"),
@@ -175,8 +202,8 @@ class BaseAgent(ABC):
                 metadata={"agent": self.name, "prompt_version": prompt_version,
                           "prompt_name": managed.name if managed else None,
                           "prompt_source": managed.source if managed else None,
-                          "prompt_managed_version": managed.version if managed else None, "provider": usage.get("provider"),
-                          "finish_reason": usage.get("finish_reason"),
+                          "prompt_managed_version": managed.version if managed else None,
+                          "provider": usage.get("provider"), "finish_reason": usage.get("finish_reason"),
                           "latency_s": usage.get("latency_s")},
             )
         tracker.record(session_id, self.name, usage)
@@ -184,17 +211,17 @@ class BaseAgent(ABC):
             self.log.warning(
                 f"{self.name}: output hit max_tokens and was truncated",
                 step="llm_truncated",
-                session_id=state["session_id"],
+                session_id=session_id,
                 iteration=state.get("iteration", 0),
             )
         self.log.log_call(
             "llm_call",
-            session_id=state["session_id"],
+            session_id=session_id,
             iteration=state.get("iteration", 0),
             latency_s=usage.get("latency_s"),
             tokens=usage,
         )
-        return text, usage
+        return result, usage
 
     async def generate_parsed(
         self,
@@ -206,6 +233,7 @@ class BaseAgent(ABC):
         step: str,
         attempts: int = 2,
         guard: Any = None,
+        schema: Any = _DEFAULT,
     ) -> tuple[T | None, str]:
         """Generate -> parse; on a parse failure, show the model its own answer plus the error and retry.
 
@@ -221,7 +249,7 @@ class BaseAgent(ABC):
                 messages.append({"role": "assistant", "content": last_raw})
                 messages.append({"role": "user", "content": retry_message.format(error=last_error)})
             async with guard or contextlib.nullcontext():
-                last_raw, _usage = await self.llm_generate(messages, state=state)
+                last_raw, _usage = await self.llm_generate(messages, state=state, schema=schema)
             try:
                 return parse(last_raw), ""
             except ValueError as exc:

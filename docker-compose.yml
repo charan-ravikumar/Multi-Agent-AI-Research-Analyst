@@ -1,5 +1,5 @@
 # App + Redis.  Secrets come from ./.env (never baked into the image):
-#   cp .env.example .env   # then fill in GROQ_API_KEY / GEMINI_API_KEY (+ optional Langfuse keys)
+#   cp .env.example .env   # then fill in GEMINI_API_KEY (+ optional Langfuse keys)
 #   docker compose up --build
 services:
   app:

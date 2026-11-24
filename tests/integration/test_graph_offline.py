@@ -204,13 +204,13 @@ def test_critic_and_reviser_see_evidence_and_automated_checks(run_graph):
     assert "EVIDENCE (the only sources you may cite)" in reviser_user and "[S:" in reviser_user
 
 
-def test_critic_prefers_gemini_when_configured(monkeypatch):
+def test_critic_uses_the_strong_model_only_when_listed(monkeypatch):
     from research_analyst.agents.critic import CriticAgent
     from research_analyst.config import settings
-    monkeypatch.setattr(settings, "critic_prefer_gemini", True)
-    assert CriticAgent().prefer_provider == "gemini"
-    monkeypatch.setattr(settings, "critic_prefer_gemini", False)
-    assert CriticAgent().prefer_provider is None
+    from research_analyst.llm import ModelTier
+    assert CriticAgent().tier is ModelTier.FAST                      # default: only the writer is strong
+    monkeypatch.setattr(settings, "gemini_strong_agents", "writer,critic")
+    assert CriticAgent().tier is ModelTier.STRONG
 
 
 def test_debate_can_be_disabled(run_graph, monkeypatch):
