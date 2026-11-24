@@ -36,7 +36,7 @@ START → planner → plan_approval (human interrupt) → fan_out (one Send per 
 | Self-critique / reflection | Critic ⇄ Reviser (`agents/critic.py`, `nodes/debate.py`) | opt-in; measured not worth it by default |
 | ReAct | `agents/react_search.py`, `SEARCH_MODE=react` | built 2026-11-24, **[UNMEASURED]** |
 | LLM-as-judge | `grounding/judge.py`, `agents/grounding_judge.py` | built 2026-11-24, **[UNMEASURED]** vs human labels |
-| Prompt versioning | `observability/prompt_store.py` (Langfuse) | on branch `feature/langfuse-prompt-management`, awaiting your confirmation |
+| Prompt versioning | `observability/prompt_store.py` (Langfuse) | merged to `main` 2026-11-24 on your confirmation; **not yet run against real Langfuse** |
 
 ## 3. Timeline
 
@@ -129,7 +129,7 @@ cheapest credibility win was a real A/B. Hence this work.
 - `README.md`, `docs/ARCHITECTURE.md`, `.env.example`, About tab updated to describe both features and their unmeasured status.
 - Nothing committed yet (working tree only).
 
-### 2026-11-24 — Feature branch `feature/langfuse-prompt-management`: Langfuse Prompt Management **(not yet merged to main)**
+### 2026-11-24 — Feature branch `feature/langfuse-prompt-management`: Langfuse Prompt Management **(merged to main on your confirmation)**
 
 **Context [DECIDED]:** you asked where prompt versioning could live; I recommended in-repo versioning first, you chose **Langfuse Prompt Management**. You also set the workflow: new features go on a branch and merge to `main` only after you confirm.
 
