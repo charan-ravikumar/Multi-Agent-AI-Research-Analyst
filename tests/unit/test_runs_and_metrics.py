@@ -174,9 +174,9 @@ def test_client_counts_retries_errors_and_successes(monkeypatch):
 
 def test_quota_status_lists_every_model_with_limits(monkeypatch):
     monkeypatch.setattr(settings, "gemini_rate_limits", '{"gemini-3.8-flash": {"rpm": 5, "tpm": 250000, "rpd": 20}}')
-    c._quota.reserve("gemini-3.8-flash", 20)
+    c._quota.reserve("k1", "gemini-3.8-flash", 20)
     q = {x["model"]: x for x in c.quota_status()}
-    assert q["gemini-3.8-flash"] == {"model": "gemini-3.8-flash", "used": 1, "rpd": 20, "rpm": 5, "tpm": 250000}
+    assert q["gemini-3.8-flash"] == {"model": "gemini-3.8-flash", "used": 1, "rpd": 20, "rpm": 5, "tpm": 250000, "keys": {"k1": 1}}
     assert q["gemini-3.5-flash-lite"]["rpd"] == 0                      # no limit configured -> shown without a bar
 
 
@@ -191,7 +191,7 @@ def test_stream_reports_cumulative_text_and_usage(monkeypatch):
     um = SimpleNamespace(prompt_token_count=3, candidates_token_count=5, total_token_count=8)
     chunks = [_chunk("Hello"), _chunk(", wor"), _chunk("ld", um, "STOP")]
     fake = SimpleNamespace(models=SimpleNamespace(generate_content_stream=lambda **kw: iter(chunks)))
-    monkeypatch.setattr(gemini_client, "_get_client", lambda: fake)
+    monkeypatch.setattr(gemini_client, "_get_client", lambda *a, **k: fake)
     seen = []
     text, usage = gemini_client.generate([{"role": "user", "content": "x"}], model="m", on_text=seen.append)
     assert text == "Hello, world" and seen == ["", "Hello", "Hello, wor", "Hello, world"]      # starts empty: retries overwrite
@@ -200,7 +200,7 @@ def test_stream_reports_cumulative_text_and_usage(monkeypatch):
 
 def test_stream_survives_a_broken_display_callback(monkeypatch):
     fake = SimpleNamespace(models=SimpleNamespace(generate_content_stream=lambda **kw: iter([_chunk("a"), _chunk("b")])))
-    monkeypatch.setattr(gemini_client, "_get_client", lambda: fake)
+    monkeypatch.setattr(gemini_client, "_get_client", lambda *a, **k: fake)
 
     def bad(_t):
         raise ValueError("ui gone")

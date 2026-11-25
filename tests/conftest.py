@@ -17,6 +17,9 @@ sys.path.insert(0, str(ROOT))
 
 _TMP = tempfile.mkdtemp(prefix="research-analyst-tests-")
 os.environ["GEMINI_API_KEY"] = "test-gemini-key"
+os.environ["GEMINI_API_KEY_2"] = ""                # never pick up a real second key from .env
+os.environ["GEMINI_LIMIT_HEADROOM"] = "1.0"       # tests assert exact limits; headroom has its own test
+os.environ["GEMINI_DAILY_RESERVE"] = "0"
 os.environ["LOG_FILE"] = os.path.join(_TMP, "agent_traces.jsonl")
 os.environ["LANGFUSE_PUBLIC_KEY"] = ""      # never send test traces, even if .env has real keys
 os.environ["LANGFUSE_SECRET_KEY"] = ""

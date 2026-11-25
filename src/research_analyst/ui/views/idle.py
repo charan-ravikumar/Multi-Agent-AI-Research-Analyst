@@ -14,7 +14,7 @@ def set_query(q: str) -> None:
 
 def missing_provider_keys() -> list[str]:
     from research_analyst.config import settings  # noqa: PLC0415
-    return [name for name, val in (("GEMINI_API_KEY", settings.gemini_api_key),) if not val]
+    return [name for name, val in (("GEMINI_API_KEY", "".join(k for _, k in settings.gemini_keys)),) if not val]
 
 
 def phase_idle() -> None:

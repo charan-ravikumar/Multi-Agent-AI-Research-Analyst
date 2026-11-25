@@ -227,7 +227,7 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** What would you monitor for an LLM application, and why those metrics? How do you separate per-request telemetry from process-level counters? What are the trade-offs of storing metrics in a file vs a TSDB? How does streaming interact with output post-processing (validation, citation numbering)? Why `st.fragment` for live updates? How do you test UI code that depends on a framework's internal DOM? What does "completed" mean as a success metric when partial reports exist?
 
-### 2026-11-25 — First real end-to-end run + fixes: branch `fix/overload-backoff-and-run-usage` **(on branch, awaiting your confirmation)**
+### 2026-11-25 — First real end-to-end run + fixes: branch `fix/overload-backoff-and-run-usage` **(merged to main 2026-11-25 together with the two-key pool)**
 
 **Context [DECIDED — your request]:** "run and check if everything works fine." I ran the app locally with your real key and drove it in headless Chrome (type a question → plan → approve → watch the run → results → verify panel → Monitor), after first loading your deployed Streamlit link (loads, new design, no errors; Monitor empty as expected).
 
@@ -247,6 +247,35 @@ cheapest credibility win was a real A/B. Hence this work.
 **Lessons:** a happy-path unit-test suite (374 tests) did not reveal that a provider outage at the last step throws away the whole run, nor the tracker/record ordering bug — both appeared only in a real end-to-end run. Retry policy must match the failure's time scale (overload spikes ≠ rate limits).
 
 **Interview questions this adds:** How do you handle a provider that is down only for your most important call? What is the right retry/backoff for 429 vs 503? How do you test timing/ordering bugs between components that clear shared state? Why partial results over failure, and how do you tell the user?
+
+### 2026-11-25 — Feature branch `feature/two-key-llm-pool`: two Gemini keys, split in the wrapper **(merged to main on your instruction, together with the fix branch below)**
+
+**Context [DECIDED — your instructions]:** you added `GEMINI_API_KEY_2` from a different free-tier account; use both, plan so rate limits are not hit, 3.5 Flash Lite for most and 3.8 Flash only where a better model is needed, split calls across the keys **in the LLM wrapper only**, run once to test, then push to main. You also said: **never add Claude as a co-author** (applied from this commit on; earlier commits on main still carry the trailer).
+
+**What was built (all in `llm/` + config; agents/tracing/UI unchanged except display)**
+- `settings.gemini_keys` → `[("k1", secret), ("k2", secret)]`; `gemini_client` keeps one SDK client per key and takes `api_key`.
+- `client._choose_key`: picks the key with the least wait for its per-minute budget, then the most requests left today, with a rotating tie-break so equal keys alternate; skips keys whose daily budget is spent or whose breaker is open; a **retry prefers the other key** (first retry is immediate when two keys exist, because the other account is a separate quota).
+- Per-(key, model) quota counter (file format now `{"k1": {model: n}, "k2": ...}`; the old single-key file is read as k1), rate limiter, and circuit breaker (one failure counted per exhausted *call*, not per attempt).
+- **Planning below the limits:** `GEMINI_LIMIT_HEADROOM=0.9` on RPM/TPM (5 → 4/min for 3.8 Flash, 15 → 13/min for Flash Lite) and `GEMINI_DAILY_RESERVE=0.05` on the daily budget (20 → 19, 500 → 475), per key.
+- Usage carries `key_id`; `UsageTracker.by_key` and the run record's `by_key` show the split; Monitor shows combined limits and the per-key split. Metrics are labelled by key id.
+- Tests: 392 passing (12 new for the pool: spread, prefer the key with more left, skip exhausted, retry on the other key, breakers, headroom, doubled per-minute capacity, status aggregation, old quota file, one SDK client per key, secrets never in labels).
+
+**Technical decisions** (INFERRED unless stated)
+
+| Decision | Why | Alternative & trade-off |
+|---|---|---|
+| Least-wait-then-most-remaining key choice | avoids waiting when the other key is free, and drains both accounts evenly so neither hits its daily cap first | Plain round-robin ignores that one key may be nearly spent or rate-limited |
+| Retry prefers the other key, first retry immediate | 429/quota/503 on one account is often not shared by the other; saves 8–16 s | Always back off = slower; ineffective for model-wide overload |
+| Headroom (0.9 / 5%) | provider-side counting windows differ from ours; stopping short avoids 429s which also burn quota | 1.0 = max throughput, occasional 429 |
+| Breaker counts per exhausted call, per (key, model) | a single call's four attempts must not open the breaker on their own | Per-attempt counting opened it mid-call (found by a test) |
+| Keys known only in `llm/` | you asked for this; keeps agents testable and provider-agnostic | — |
+| Writer stays the only 3.8 Flash agent | scarce quota (now 2×19/day) | add Planner (+1 call/run) if 3.8 is stable |
+
+**Live verification [MEASURED]:** Run A (defaults) failed at the Writer — `gemini-3.8-flash` returned 503 on **both** keys, 4 attempts (k2, k1, k2, k1), so it is a model-wide outage on Google's side, not key-specific; before that the pool split 17 calls 7/10 and recovered three Flash Lite 503s by switching key. Run B (Writer on Flash Lite via `GEMINI_STRONG_AGENTS=`): **complete**, 26 calls split **13/13**, 0 retries, 39 s of pipeline time (vs ~158 s on one key with waits), 41/41 report sentences cited, grounding judge 24 claims (22 supported, 2 partial), live draft streamed (8.6k chars), no UI exceptions.
+
+**Open item:** with the default `GEMINI_STRONG_AGENTS=writer`, runs fail at the Writer while 3.8 Flash is down (it has failed every call for ~a day). Setting `GEMINI_STRONG_AGENTS=` (empty) in `.env` / Streamlit secrets runs everything on Flash Lite. I did not change the default; your call. A cheaper alternative that keeps "no fallback" in spirit is also possible: persisting the finished research so a Writer failure can be retried without redoing 25 calls.
+
+**Interview questions this adds:** How do you spread load across multiple API keys/accounts safely (and is that within provider terms)? How do you schedule between resources with different remaining budgets? Why count breaker failures per call? How do you keep the secret out of logs/metrics? What is the difference between a per-key and a model-wide failure, and how does your retry policy tell them apart?
 
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.

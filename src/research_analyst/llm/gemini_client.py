@@ -26,19 +26,19 @@ from research_analyst.llm.tools import ToolCall, ToolSpec, ToolTurn, to_declarat
 
 logger = logging.getLogger(__name__)
 
-_client: genai.Client | None = None
+_clients: dict[str, genai.Client] = {}          # one SDK client per API key
 
 
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        if not settings.gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY is not set")
-        _client = genai.Client(
-            api_key=settings.gemini_api_key,
-            http_options=types.HttpOptions(timeout=int(settings.llm_timeout_seconds * 1000)),  # ms
-        )
-    return _client
+def _get_client(api_key: str | None = None) -> genai.Client:
+    """The SDK client for ``api_key`` (default: the first configured key)."""
+    key = api_key or settings.gemini_api_key
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+    client = _clients.get(key)
+    if client is None:
+        client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(settings.llm_timeout_seconds * 1000)))  # ms
+        _clients[key] = client
+    return client
 
 
 def _thinking() -> types.ThinkingConfig | None:
@@ -82,7 +82,7 @@ def _finish_and_usage(response: Any, model: str, latency: float) -> dict:
 
 def generate(
     messages: list[dict], *, model: str, temperature: float = 0.2, max_tokens: int = 2048,
-    json_mode: bool = False, schema: Any = None, on_text: Callable[[str], None] | None = None,
+    json_mode: bool = False, schema: Any = None, on_text: Callable[[str], None] | None = None, api_key: str | None = None,
 ) -> tuple[str, dict]:
     """Text, or JSON constrained to ``schema`` (a Pydantic model class) when given.  Returns (text, usage).
 
@@ -97,18 +97,18 @@ def generate(
     )
     t0 = time.perf_counter()
     if on_text is not None:
-        return _stream(model, contents, cfg, t0, on_text)
-    response = _get_client().models.generate_content(model=model, contents=contents, config=cfg)  # type: ignore[arg-type]
+        return _stream(model, contents, cfg, t0, on_text, api_key)
+    response = _get_client(api_key).models.generate_content(model=model, contents=contents, config=cfg)  # type: ignore[arg-type]
     usage = _finish_and_usage(response, model, time.perf_counter() - t0)
     logger.debug("Gemini response | %s", usage)
     return response.text or "", usage
 
 
 def _stream(model: str, contents: list[types.Content], cfg: types.GenerateContentConfig, t0: float,
-            on_text: Callable[[str], None]) -> tuple[str, dict]:
+            on_text: Callable[[str], None], api_key: str | None = None) -> tuple[str, dict]:
     on_text("")                                           # a retried attempt starts from an empty screen
     text, last = "", None
-    for chunk in _get_client().models.generate_content_stream(model=model, contents=contents, config=cfg):  # type: ignore[arg-type]
+    for chunk in _get_client(api_key).models.generate_content_stream(model=model, contents=contents, config=cfg):  # type: ignore[arg-type]
         piece = chunk.text or ""
         if piece:
             text += piece
@@ -125,7 +125,7 @@ def _stream(model: str, contents: list[types.Content], cfg: types.GenerateConten
 
 def tool_turn(
     system: str | None, history: list[Any], tools: list[ToolSpec], *, model: str,
-    temperature: float = 0.2, max_tokens: int = 1024,
+    temperature: float = 0.2, max_tokens: int = 1024, api_key: str | None = None,
 ) -> ToolTurn:
     """One model turn in a tool-calling conversation.  ``history`` is a list of provider Content objects."""
     cfg = types.GenerateContentConfig(
@@ -137,7 +137,7 @@ def tool_turn(
         thinking_config=_thinking(),
     )
     t0 = time.perf_counter()
-    response = _get_client().models.generate_content(model=model, contents=history, config=cfg)
+    response = _get_client(api_key).models.generate_content(model=model, contents=history, config=cfg)
     usage = _finish_and_usage(response, model, time.perf_counter() - t0)
     cands = response.candidates or []
     content = cands[0].content if cands else None

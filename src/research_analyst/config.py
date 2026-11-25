@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Everything goes through the Gemini API.  A failing call is retried (429/5xx) and then raises; there is no
     # second provider to hide an outage.  Keys default to "" so the package imports without credentials.
     gemini_api_key: str = ""
+    # Optional second key from a DIFFERENT Google account/project: it has its own free-tier quota, so the LLM wrapper spreads
+    # calls over both keys (llm/client.py).  Nothing outside llm/ knows there are two keys.
+    gemini_api_key_2: str = ""
     # Two models: a cheap high-volume one for most agents, a stronger one only where reasoning quality matters.
     gemini_fast_model: str = "gemini-3.5-flash-lite"     # 15 RPM, 250K TPM, 500 RPD on the free tier
     gemini_strong_model: str = "gemini-3.8-flash"        # 5 RPM, 250K TPM, 20 RPD on the free tier
@@ -33,12 +36,17 @@ class Settings(BaseSettings):
     judge_model: str = ""
     # Free-tier limits per model, JSON: {"model": {"rpm": n, "tpm": n, "rpd": n}}.  Calls wait for RPM/TPM room and
     # fail fast with a clear error once RPD is spent (instead of burning retries on 429s).  {} disables limiting.
+    # Applied PER KEY (each account has its own quota).
     gemini_rate_limits: str = (
         '{"gemini-3.8-flash": {"rpm": 5, "tpm": 250000, "rpd": 20}, '
         '"gemini-3.5-flash-lite": {"rpm": 15, "tpm": 250000, "rpd": 500}}'
     )
     # Where the per-day request counter is kept (resets at midnight Pacific, like Google's quota).
     llm_quota_file: str = "logs/llm_quota.json"
+    # Plan to stay UNDER the limits, not at them: per-minute limits are enforced at this fraction (clock skew, bursts that the
+    # provider counts differently) and the per-day budget keeps a small reserve.  1.0 = use the full documented limit.
+    gemini_limit_headroom: float = 0.9
+    gemini_daily_reserve: float = 0.05
     # Gemini 3 models take a thinking LEVEL (thinking_budget=0 is rejected): "", "minimal", "low", "medium", "high".
     # Empty = the model default.  Thinking tokens count against max_tokens, so lower it if answers get truncated.
     gemini_thinking_level: str = ""
@@ -158,6 +166,11 @@ class Settings(BaseSettings):
     # Langfuse's own docs/site use LANGFUSE_BASE_URL (region-specific: cloud / us.cloud / jp.cloud ...).
     # It takes precedence over LANGFUSE_HOST when set.
     langfuse_base_url: str = ""
+
+    @property
+    def gemini_keys(self) -> list[tuple[str, str]]:
+        """[(key id, secret)] for every configured key.  The id ("k1", "k2") is what appears in logs and counters — never the secret."""
+        return [(f"k{i}", k.strip()) for i, k in enumerate((self.gemini_api_key, self.gemini_api_key_2), 1) if k and k.strip()]
 
     @property
     def strong_agents(self) -> frozenset[str]:

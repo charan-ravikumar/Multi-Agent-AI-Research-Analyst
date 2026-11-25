@@ -46,7 +46,9 @@ def _quota_bars() -> None:
         frac = min(1.0, used / rpd) if rpd else 0.0
         cls = "hot" if frac >= 0.9 else "warn" if frac >= 0.7 else ""
         limit = f"{used} of {rpd} requests today" if rpd else f"{used} requests today (no daily limit set)"
-        extra = " · ".join(x for x in (f"{q['rpm']}/min" if q["rpm"] else "", f"{q['tpm']:,} tokens/min" if q["tpm"] else "") if x)
+        split = " + ".join(f"{k}: {n}" for k, n in q.get("keys", {}).items()) if len(q.get("keys", {})) > 1 else ""
+        extra = " · ".join(x for x in (f"{q['rpm']}/min" if q["rpm"] else "", f"{q['tpm']:,} tokens/min" if q["tpm"] else "",
+                                        f"split across keys — {split}" if split else "") if x)
         role = []
         if q["model"] == settings.gemini_fast_model:
             role.append("fast")
@@ -139,7 +141,8 @@ def render_monitor() -> None:
 
     st.markdown('<div class="kicker">Free-tier quota</div>', unsafe_allow_html=True)
     _quota_bars()
-    st.caption("Daily counts are stored on disk and reset at midnight Pacific time, like Google's own quota. Every retry counts.")
+    st.caption("Daily counts are stored on disk and reset at midnight Pacific time, like Google's own quota. Every retry counts. "
+               "With two API keys the limits shown are the sum of both accounts; the wrapper splits calls between them.")
 
     st.markdown('<div class="kicker">Reliability</div>', unsafe_allow_html=True)
     left, right = st.columns([3, 2])

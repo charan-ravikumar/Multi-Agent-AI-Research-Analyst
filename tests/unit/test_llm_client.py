@@ -154,9 +154,9 @@ def test_breaker_recovers_after_cooldown(monkeypatch, sleeps):
     for _ in range(settings.llm_breaker_threshold):
         with pytest.raises(RuntimeError):
             _gen()
-    c._breaker._open_until["gemini-3.5-flash-lite"] = 0.0       # cooldown elapsed
+    c._breaker._open_until["k1:gemini-3.5-flash-lite"] = 0.0       # cooldown elapsed
     monkeypatch.setattr(c.gemini_client, "generate", lambda *a, **k: OK)
-    assert _gen()[0] == "ok" and not c._breaker.is_open("gemini-3.5-flash-lite")
+    assert _gen()[0] == "ok" and not c._breaker.is_open("k1:gemini-3.5-flash-lite")
 
 
 # ── rate limits: RPM / TPM / RPD ─────────────────────────────────────────────
@@ -221,18 +221,18 @@ def test_daily_quota_is_enforced_without_calling_the_api(monkeypatch):
     monkeypatch.setattr(c.gemini_client, "generate", gen)
     _gen()
     _gen()
-    with pytest.raises(c.DailyQuotaExceeded, match=r"2/2.*midnight Pacific"):
+    with pytest.raises(c.DailyQuotaExceeded, match=r"all 1 key.*midnight Pacific"):
         _gen()
     assert n["n"] == 2 and c.daily_requests_used("gemini-3.5-flash-lite") == 2
 
 
 def test_daily_quota_survives_restart_and_resets_on_a_new_day(monkeypatch):
     monkeypatch.setattr(settings, "gemini_rate_limits", '{"m": {"rpd": 1}}')
-    c._Quota().reserve("m", 1)
+    c._Quota().reserve("k1", "m", 1)
     with pytest.raises(c.DailyQuotaExceeded):
-        c._Quota().reserve("m", 1)                               # a fresh object reads the persisted counter
+        c._Quota().reserve("k1", "m", 1)                               # a fresh object reads the persisted counter
     monkeypatch.setattr(c._Quota, "_today", staticmethod(lambda: "2999-01-01"))
-    c._Quota().reserve("m", 1)                                   # new Pacific day: budget is back
+    c._Quota().reserve("k1", "m", 1)                                   # new Pacific day: budget is back
 
 
 def test_each_retry_attempt_counts_against_the_daily_budget(monkeypatch, sleeps):
@@ -302,7 +302,7 @@ def _resp(parts=None, text="{}"):
 
 def _patch_client(monkeypatch, response):
     fm = _FakeModels(response)
-    monkeypatch.setattr(gemini_client, "_get_client", lambda: SimpleNamespace(models=fm))
+    monkeypatch.setattr(gemini_client, "_get_client", lambda *a, **k: SimpleNamespace(models=fm))
     return fm
 
 
@@ -376,3 +376,145 @@ def test_a_503_that_recovers_after_the_long_waits_succeeds(monkeypatch, sleeps):
         return OK
     monkeypatch.setattr(c.gemini_client, "generate", flaky)
     assert _gen()[0] == "ok" and calls["n"] == 4 == c._MAX_RETRIES and sum(sleeps) > 20
+
+
+# ── two-key pool (all inside the wrapper) ────────────────────────────────────
+
+FAST = "gemini-3.5-flash-lite"
+
+
+@pytest.fixture
+def two_keys(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "secret-one")
+    monkeypatch.setattr(settings, "gemini_api_key_2", "secret-two")
+    used = []
+
+    def gen(messages, **k):
+        used.append(k["api_key"])
+        return "ok", {"total_tokens": 10, "model": k["model"]}
+    monkeypatch.setattr(c.gemini_client, "generate", gen)
+    return used
+
+
+def test_keys_property_ignores_blank_and_exposes_only_ids_not_secrets(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "a")
+    monkeypatch.setattr(settings, "gemini_api_key_2", "  ")
+    assert settings.gemini_keys == [("k1", "a")]
+    monkeypatch.setattr(settings, "gemini_api_key_2", "b")
+    assert [kid for kid, _ in settings.gemini_keys] == ["k1", "k2"]
+
+
+def test_calls_are_spread_over_both_keys_and_usage_says_which_served_each(two_keys):
+    ids = [_gen()[1]["key_id"] for _ in range(10)]
+    assert set(two_keys) == {"secret-one", "secret-two"} and abs(two_keys.count("secret-one") - two_keys.count("secret-two")) <= 1
+    assert set(ids) == {"k1", "k2"} and "secret" not in json.dumps(ids)
+
+
+def test_the_key_with_more_requests_left_today_is_preferred(two_keys, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_rate_limits", json.dumps({FAST: {"rpd": 100}}))
+    for _ in range(30):
+        c._quota.reserve("k1", FAST, 100)                          # key 1 already spent 30 today
+    for _ in range(10):
+        _gen()
+    assert two_keys.count("secret-two") == 10 and "secret-one" not in two_keys
+
+
+def test_an_exhausted_key_is_skipped_and_only_when_all_are_exhausted_it_raises(two_keys, monkeypatch):
+    monkeypatch.setattr(settings, "gemini_rate_limits", json.dumps({FAST: {"rpd": 2}}))
+    for _ in range(2):
+        c._quota.reserve("k1", FAST, 2)
+    _gen()
+    _gen()
+    assert set(two_keys) == {"secret-two"}                          # k1 is spent; k2 serves
+    with pytest.raises(c.DailyQuotaExceeded, match="all 2 key"):
+        _gen()
+
+
+def test_a_failed_call_is_retried_at_once_on_the_other_key(monkeypatch, sleeps):
+    monkeypatch.setattr(settings, "gemini_api_key", "secret-one")
+    monkeypatch.setattr(settings, "gemini_api_key_2", "secret-two")
+    seen = []
+
+    def gen(messages, **k):
+        seen.append(k["api_key"])
+        if k["api_key"] == "secret-one":
+            raise _429()
+        return "ok", {"total_tokens": 1, "model": k["model"]}
+    monkeypatch.setattr(c.gemini_client, "generate", gen)
+    # force the first pick to be key 1 (more requests left)
+    monkeypatch.setattr(settings, "gemini_rate_limits", json.dumps({FAST: {"rpd": 100}}))
+    for _ in range(5):
+        c._quota.reserve("k2", FAST, 100)
+    text, usage = _gen()
+    assert text == "ok" and seen == ["secret-one", "secret-two"] and usage["key_id"] == "k2" and sleeps == []
+
+
+def test_an_open_breaker_on_one_key_routes_everything_to_the_other_and_both_open_fails_fast(two_keys):
+    for _ in range(settings.llm_breaker_threshold):
+        c._breaker.failure("k1:" + FAST)
+    for _ in range(4):
+        _gen()
+    assert set(two_keys) == {"secret-two"}
+    for _ in range(settings.llm_breaker_threshold):
+        c._breaker.failure("k2:" + FAST)
+    with pytest.raises(RuntimeError, match="circuit open.*every key"):
+        _gen()
+
+
+def test_limits_are_planned_with_headroom_below_the_documented_free_tier(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_limit_headroom", 0.9)
+    monkeypatch.setattr(settings, "gemini_daily_reserve", 0.05)
+    monkeypatch.setattr(settings, "gemini_rate_limits", '{"m": {"rpm": 15, "tpm": 250000, "rpd": 500}, "s": {"rpm": 5, "tpm": 250000, "rpd": 20}}')
+    assert c._limits_for("m") == {"rpm": 13, "tpm": 225000, "rpd": 475}
+    assert c._limits_for("s") == {"rpm": 4, "tpm": 225000, "rpd": 19}          # 5 -> 4 requests/minute, 20 -> 19 per day
+
+
+def test_two_keys_double_the_per_minute_capacity_so_a_burst_does_not_wait(monkeypatch, clock):
+    monkeypatch.setattr(settings, "gemini_rate_limits", json.dumps({FAST: {"rpm": 5}}))
+    monkeypatch.setattr(c.gemini_client, "generate", lambda *a, **k: ("ok", {"total_tokens": 1, "model": FAST}))
+    monkeypatch.setattr(settings, "gemini_api_key", "secret-one")
+    monkeypatch.setattr(settings, "gemini_api_key_2", "")
+    for _ in range(10):
+        _gen()
+    assert clock and sum(clock) > 50                                # one key: the 6th..10th calls had to wait for the minute
+    clock.clear()
+    c._tpm.reset()
+    monkeypatch.setattr(settings, "gemini_api_key_2", "secret-two")
+    for _ in range(10):
+        _gen()
+    assert clock == []                                              # two keys: 10 calls fit in the same minute, no waiting
+
+
+def test_quota_status_sums_both_keys_and_shows_the_split(monkeypatch, two_keys):
+    monkeypatch.setattr(settings, "gemini_rate_limits", json.dumps({FAST: {"rpm": 15, "tpm": 250000, "rpd": 500}}))
+    for _ in range(4):
+        _gen()
+    row = next(q for q in c.quota_status() if q["model"] == FAST)
+    assert row["rpd"] == 1000 and row["rpm"] == 30 and row["used"] == 4 and row["keys"] == {"k1": 2, "k2": 2}
+
+
+def test_an_older_single_key_quota_file_is_read_as_key_one(monkeypatch, tmp_path):
+    f = tmp_path / "q.json"
+    monkeypatch.setattr(settings, "llm_quota_file", str(f))
+    f.write_text(json.dumps({"date": c._Quota._today(), "counts": {FAST: 12}}))
+    assert c._Quota().used(FAST, "k1") == 12 and c._Quota().used(FAST) == 12
+
+
+def test_each_key_gets_its_own_sdk_client_and_the_secret_is_forwarded(monkeypatch):
+    made = []
+    monkeypatch.setattr(gemini_client.genai, "Client", lambda api_key, **k: made.append(api_key) or SimpleNamespace(key=api_key))
+    gemini_client._clients.clear()
+    a, b = gemini_client._get_client("key-a"), gemini_client._get_client("key-b")
+    assert a.key == "key-a" and b.key == "key-b" and gemini_client._get_client("key-a") is a and made == ["key-a", "key-b"]
+    gemini_client._clients.clear()
+
+
+def test_metrics_and_usage_are_labelled_by_key_id(two_keys):
+    from research_analyst.observability import metrics
+    from research_analyst.observability.usage import tracker
+    metrics.reset()
+    for _ in range(4):
+        _, usage = _gen()
+        tracker.record("sid", "reader", usage)
+    assert metrics.total("llm_success") == 4
+    assert {k: v["calls"] for k, v in tracker.summary("sid")["by_key"].items()} == {"k1": 2, "k2": 2}

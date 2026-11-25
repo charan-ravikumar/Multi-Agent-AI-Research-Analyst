@@ -80,6 +80,7 @@ def build_record(
         "cost_usd": usage.get("estimated_cost_usd"),
         "by_agent": {a: {k: v.get(k, 0) for k in ("calls", "total_tokens", "latency_s")} for a, v in (usage.get("by_agent") or {}).items()},
         "by_model": {m: {k: v.get(k, 0) for k in ("calls", "total_tokens", "latency_s")} for m, v in (usage.get("by_model") or {}).items()},
+        "by_key": {k: v.get("calls", 0) for k, v in (usage.get("by_key") or {}).items()},
         "cited_ratio": cs.get("report_cited_ratio", cs.get("cited_ratio")),
         "report_claims": cs.get("report_claim_sentences"),
         "sources_cited": cs.get("sources_cited"), "sources_consulted": cs.get("sources_consulted"),

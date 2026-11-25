@@ -65,6 +65,7 @@ Each item below is covered by offline tests; where a live run exposed the proble
   tokens/minute are waited for; the requests/day budget is counted, persisted and raises a clear error instead of
   burning retries). A fast model (`gemini-3.5-flash-lite`) serves most agents; the stronger `gemini-3.8-flash` (only 20
   requests/day on the free tier) is used only for the agents in `GEMINI_STRONG_AGENTS` (default: the Writer).
+- **Two API keys, split inside the LLM wrapper only.** With `GEMINI_API_KEY_2` (a key from a different Google account, so its own free quota) every call goes to the key with the most headroom; a retry prefers the other key; each key has its own per-minute limiter, daily counter and circuit breaker. Limits are planned *below* the documented free tier (`GEMINI_LIMIT_HEADROOM`=0.9 on per-minute limits, 5% daily reserve) so the provider's limit is not reached. Nothing outside `llm/` knows there are two keys.
 - **Native function calling for the ReAct search** (tools declared to the API, mode `ANY`: the model can only answer with
   a call to a declared tool, arguments checked against a JSON schema) and **schema-constrained structured outputs**
   (Pydantic `response_schema`) for the Planner, Reader, Synthesizer, Critic, query rewrite and grounding judge. The API
@@ -170,6 +171,6 @@ There is no Redis on Cloud (memory features do nothing) and the filesystem is ep
 history). `requirements.txt` is generated from `uv.lock` (`uv export --no-dev --no-hashes --no-emit-project`).
 
 Useful settings (see `src/research_analyst/config.py` and `.env.example`): `TOKEN_BUDGET_PER_RUN`,
-`LLM_PRICE_PER_1M_TOKENS`, `GEMINI_FAST_MODEL`, `GEMINI_STRONG_MODEL`, `GEMINI_STRONG_AGENTS`, `GEMINI_RATE_LIMITS`,
+`LLM_PRICE_PER_1M_TOKENS`, `GEMINI_FAST_MODEL`, `GEMINI_STRONG_MODEL`, `GEMINI_API_KEY_2`, `GEMINI_STRONG_AGENTS`, `GEMINI_RATE_LIMITS`, `GEMINI_LIMIT_HEADROOM`,
 `GEMINI_THINKING_LEVEL`, `JUDGE_MODEL`, `QUERY_REWRITE`, `ARXIV_ENABLED`, `ARXIV_FULLTEXT`, `FETCH_PAGES`,
 `READER_BATCH_SIZE`, `READER_TARGET_FACTS`, `DEBATE_MAX_ROUNDS`, `RUN_TIMEOUT_SECONDS`, `LOG_FORMAT`.

@@ -50,7 +50,7 @@ class UsageTracker:
     def _entry(self, session_id: str) -> dict:
         e = self._s.get(session_id)
         if e is None:
-            e = {"all": _blank(), "by_agent": {}, "by_model": {}, "truncated_calls": 0}
+            e = {"all": _blank(), "by_agent": {}, "by_model": {}, "by_key": {}, "truncated_calls": 0}
             self._s[session_id] = e
             while len(self._s) > self._MAX_SESSIONS:
                 self._s.popitem(last=False)
@@ -63,8 +63,10 @@ class UsageTracker:
         model = str(usage.get("model") or "unknown")
         with self._lock:
             e = self._entry(session_id)
-            for bucket in (e["all"], e["by_agent"].setdefault(agent, _blank()),
-                           e["by_model"].setdefault(model, _blank())):
+            buckets = [e["all"], e["by_agent"].setdefault(agent, _blank()), e["by_model"].setdefault(model, _blank())]
+            if usage.get("key_id"):                                       # which API key served it (id only, never the secret)
+                buckets.append(e["by_key"].setdefault(str(usage["key_id"]), _blank()))
+            for bucket in buckets:
                 bucket["calls"] += 1
                 bucket["prompt_tokens"] += p
                 bucket["completion_tokens"] += c
@@ -89,11 +91,11 @@ class UsageTracker:
         with self._lock:
             e = self._s.get(session_id)
             if not e:
-                return {**_blank(), "by_agent": {}, "by_model": {}, "truncated_calls": 0,
+                return {**_blank(), "by_agent": {}, "by_model": {}, "by_key": {}, "truncated_calls": 0,
                         "budget": settings.token_budget_per_run, "estimated_cost_usd": None}
             by_model = {m: dict(v) for m, v in e["by_model"].items()}
             out = {**e["all"], "by_agent": {a: dict(v) for a, v in e["by_agent"].items()},
-                   "by_model": by_model, "truncated_calls": e["truncated_calls"],
+                   "by_model": by_model, "by_key": {k: dict(v) for k, v in e.get("by_key", {}).items()}, "truncated_calls": e["truncated_calls"],
                    "budget": settings.token_budget_per_run}
         prices = _prices()
         if prices:
