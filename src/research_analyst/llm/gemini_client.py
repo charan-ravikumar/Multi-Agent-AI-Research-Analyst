@@ -14,6 +14,7 @@ SDK errors (google.genai.errors.APIError, 4xx/5xx) propagate to llm/client.py, w
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -27,6 +28,7 @@ from research_analyst.llm.tools import ToolCall, ToolSpec, ToolTurn, to_declarat
 logger = logging.getLogger(__name__)
 
 _clients: dict[str, genai.Client] = {}          # one SDK client per API key
+_clients_lock = threading.Lock()                # parallel branches make their first calls at the same moment
 
 
 def _get_client(api_key: str | None = None) -> genai.Client:
@@ -34,11 +36,12 @@ def _get_client(api_key: str | None = None) -> genai.Client:
     key = api_key or settings.gemini_api_key
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set")
-    client = _clients.get(key)
-    if client is None:
-        client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(settings.llm_timeout_seconds * 1000)))  # ms
-        _clients[key] = client
-    return client
+    with _clients_lock:       # two clients for one key would leave one to be garbage-collected (closed) mid-request
+        client = _clients.get(key)
+        if client is None:
+            client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(settings.llm_timeout_seconds * 1000)))  # ms
+            _clients[key] = client
+        return client
 
 
 def _thinking() -> types.ThinkingConfig | None:

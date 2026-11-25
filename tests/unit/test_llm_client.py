@@ -518,3 +518,30 @@ def test_metrics_and_usage_are_labelled_by_key_id(two_keys):
         tracker.record("sid", "reader", usage)
     assert metrics.total("llm_success") == 4
     assert {k: v["calls"] for k, v in tracker.summary("sid")["by_key"].items()} == {"k1": 2, "k2": 2}
+
+
+def test_parallel_first_calls_share_one_sdk_client(monkeypatch):
+    """A discarded duplicate client is closed when garbage-collected, breaking a request that still uses it
+    (seen live: "Cannot send a request, as the client has been closed")."""
+    import threading
+    import time
+
+    from research_analyst.llm import gemini_client
+
+    made = []
+
+    def slow_client(api_key, **kw):
+        time.sleep(0.05)
+        made.append(api_key)
+        return object()
+
+    monkeypatch.setattr(gemini_client.genai, "Client", slow_client)
+    gemini_client._clients.clear()
+    got = []
+    threads = [threading.Thread(target=lambda: got.append(gemini_client._get_client("key-a"))) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    gemini_client._clients.clear()
+    assert made == ["key-a"] and len({id(c) for c in got}) == 1
