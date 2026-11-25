@@ -27,7 +27,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))   # allow running without installing the package
 
 from research_analyst.pipeline.graph import app
-from research_analyst.models import ResearchState
+from research_analyst.models.research_state import new_research_state
 
 
 def _save_state(path: Path, text: str) -> int:
@@ -46,22 +46,8 @@ async def main() -> None:
     print("query      : What are the main applications of large language models in healthcare?")
     print()
 
-    initial = ResearchState(
-        session_id=session_id,
-        query="What are the main applications of large language models in healthcare?",
-        research_plan=None,
-        sub_questions=[],
-        search_results=[],
-        failed_sub_questions=[],
-        extracted_facts=[],
-        citations=[],
-        contradictions=[],
-        unresolved_gaps=[],
-        gap_items=[],
-        draft=[],
-        final_report="",
-        iteration=0,
-        routing_history=[],
+    initial = new_research_state(
+        session_id, "What are the main applications of large language models in healthcare?",
         auto_approve_plan=True,   # skip human checkpoint for this demo
     )
 

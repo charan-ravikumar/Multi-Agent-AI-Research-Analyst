@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from research_analyst.ui import queued
 from research_analyst.ui import state as S
 from research_analyst.ui import theme
 from research_analyst.ui.monitor import render_monitor
@@ -31,6 +32,11 @@ def main() -> None:
     if "phase" not in st.session_state:
         st.session_state.phase = "idle"
 
+    dispatch = dict(PHASE_DISPATCH)
+    if queued.enabled():                       # a worker runs the pipeline; these two phases only watch it
+        dispatch.update(planning=queued.phase_planning, researching=queued.phase_researching)
+        queued.reattach()
+
     tab_research, tab_gallery, tab_monitor, tab_about = st.tabs(["Research", "Sample reports", "Monitor", "About"])
     with tab_about:
         st.markdown(ABOUT_MD)
@@ -39,7 +45,7 @@ def main() -> None:
     with tab_monitor:
         render_monitor()
     with tab_research:
-        handler = PHASE_DISPATCH.get(st.session_state.phase)
+        handler = dispatch.get(st.session_state.phase)
         if handler is None:
             st.error(f"Unknown phase: {st.session_state.phase!r}")
             S.reset_state()

@@ -7,6 +7,7 @@ import streamlit as st
 
 from research_analyst.observability.progress import progress
 from research_analyst.ui import components as C
+from research_analyst.ui import queued
 from research_analyst.ui import state as S
 from research_analyst.ui.runner import research_thread
 
@@ -59,18 +60,22 @@ def phase_awaiting_approval() -> None:
             if not approved:
                 st.error("Add at least one sub-question before approving.")
                 return
-            # Clean up textarea state before thread starts
-            st.session_state.pop("sq_textarea", None)
             start_research(approved)
 
     with col_cancel:
         if st.button("Cancel / start over"):
+            if queued.enabled():
+                queued.cancel_run()
             S.reset_state()
             st.rerun()
 
 
 def start_research(approved_sqs: list[str]) -> None:
-    """Kick off the research background thread and transition to 'researching'."""
+    """Queue the research for a worker, or start the in-process thread, and transition to 'researching'."""
+    if queued.enabled():
+        queued.approve(approved_sqs)          # on failure the page stays, with the edited plan intact
+        return
+    st.session_state.pop("sq_textarea", None)     # clean up textarea state before the thread starts
     cfg           = {"configurable": {"thread_id": st.session_state.thread_id,
                                       "session_id": st.session_state.session_id},
                      "tags": ["review:on" if st.session_state.get("review_rounds") else "review:off"]}

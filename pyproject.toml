@@ -29,10 +29,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "fakeredis>=2.20",
+    "fakeredis[lua]>=2.20",
     "ruff>=0.5",
     "mypy>=2.4.1",
     "pytest-cov>=7.1.0",
+    "langgraph-checkpoint-conformance>=0.0.2",
 ]
 
 [tool.pytest.ini_options]

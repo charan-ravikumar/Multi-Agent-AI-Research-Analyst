@@ -23,22 +23,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from research_analyst.config import settings  # noqa: E402
 from research_analyst.llm.preflight import assert_models_available  # noqa: E402
-from research_analyst.models import ResearchState  # noqa: E402
+from research_analyst.models.research_state import new_research_state  # noqa: E402
 from research_analyst.observability import tracing  # noqa: E402
 from research_analyst.pipeline.graph import app  # noqa: E402
 from research_analyst.ui.about import SAMPLE_QUESTIONS  # noqa: E402
 from research_analyst.ui.gallery import GALLERY_DIR, entry_from_state  # noqa: E402
 
 
-def initial_state(question: str) -> ResearchState:
-    return ResearchState(
-        session_id=str(uuid.uuid4()), query=question, research_plan=None, sub_questions=[], search_results=[],
-        failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[], unresolved_gaps=[], gap_items=[],
-        draft=[], final_report="", iteration=0, routing_history=[], auto_approve_plan=True)
-
-
 async def generate(question: str) -> dict:
-    st = initial_state(question)
+    st = new_research_state(str(uuid.uuid4()), question, auto_approve_plan=True)
     t0 = time.time()
     with tracing.run_span("gallery", st["session_id"], question, tags=["gallery"]):
         state = await asyncio.wait_for(app.ainvoke(st, config={"configurable": {"thread_id": st["session_id"]}}),

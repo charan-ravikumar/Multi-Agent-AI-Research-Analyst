@@ -31,6 +31,7 @@ SESSION_KEYS = (
     "error",
     "sq_textarea", "_sq_default",
     "query_input", "review_loop", "review_rounds",
+    "submitted_run", "run_elapsed_s",
 )
 
 
@@ -39,6 +40,7 @@ def reset_state() -> None:
     is intentionally preserved — no need to re-import on each run."""
     for key in SESSION_KEYS:
         st.session_state.pop(key, None)
+    st.query_params.pop("run", None)           # queue mode keeps the run id in the URL
 
 
 def cancel_run() -> None:

@@ -5,8 +5,9 @@ services:
   app:
     build: .
     env_file: .env
-    environment:
+    environment: &runtime
       REDIS_URL: redis://redis:6379/0        # overrides any localhost value from .env
+      EXECUTION_MODE: queue                  # the UI submits jobs; the worker service runs them
     ports:
       - "127.0.0.1:8501:8501"                # localhost only: the UI has no authentication
     depends_on:
@@ -16,9 +17,26 @@ services:
       - ./logs:/app/logs                     # JSONL traces survive restarts
     restart: unless-stopped
 
+  worker:
+    build: .
+    command: ["python", "-m", "research_analyst.jobs.worker"]
+    env_file: .env
+    environment: *runtime
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs                     # run records and quota counter, read by the UI's Monitor page
+    healthcheck:
+      disable: true                          # the image's check is for the web UI
+    stop_grace_period: 20s                   # time to hand unfinished jobs back
+    restart: unless-stopped
+    # Keep one replica: the LLM rate limiter is per process, so more workers would exceed the provider limits.
+
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    # noeviction: jobs and checkpoints must never be silently dropped under memory pressure.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis-data:/data
     healthcheck:

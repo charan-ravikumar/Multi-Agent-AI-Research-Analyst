@@ -119,8 +119,8 @@ first run).
   `gemini-3.5-flash-lite` 15/minute and 500/day (about 25 calls per run, so roughly 20 runs/day; more in ReAct mode). If a
   model is overloaded (503/504, seen on `gemini-3.8-flash`) retries are exhausted and the run fails — set
   `GEMINI_STRONG_AGENTS=` (empty) to run everything on the fast model. arXiv rate-limits by IP (the client backs off).
-- Single process: in-memory LangGraph checkpoints (paused plans are lost on restart), no authentication or
-  multi-user isolation, progress is in-process. "Cross-run memory" is keyword matching over past reports; it is
+- In the default `inline` mode: in-memory LangGraph checkpoints (paused plans are lost on restart) and in-process
+  progress; [queue mode](#durable-runs-execution_modequeue) removes both. No authentication or multi-user isolation. "Cross-run memory" is keyword matching over past reports; it is
   shown to the human and does not influence generation.
 - Prompt-injection defences are structural mitigations with offline tests; live-model robustness is only checked
   by the manual script `tests/manual/redteam_live.py`.
@@ -129,7 +129,7 @@ first run).
 
 ```text
 src/research_analyst/
-  agents/  pipeline/  llm/  retrieval/  grounding/  safety/  observability/  memory/  models/  evaluation/  ui/
+  agents/  pipeline/  jobs/  llm/  retrieval/  grounding/  safety/  observability/  memory/  models/  evaluation/  ui/
 app/main.py     Streamlit entry point (thin shim)
 scripts/        run_demo.py, generate_gallery.py
 tests/          unit/  integration/  ui/  (offline)  and  manual/  (live)
@@ -139,7 +139,7 @@ docs/           ARCHITECTURE.md, STORY.md
 ## Run it
 
 Requirements: Python 3.12, [uv](https://github.com/astral-sh/uv), a Gemini API key.
-Redis is optional.
+Redis is optional (required for `EXECUTION_MODE=queue`).
 
 ```bash
 uv sync
@@ -150,12 +150,43 @@ uv run python scripts/run_demo.py           # one run on the command line
 uv run python scripts/generate_gallery.py   # regenerate the sample reports (LIVE: ~21k tokens each)
 ```
 
-Quality gates (all offline — no keys, no network, no Redis): `uv run pytest` (≥ 80% coverage enforced),
+Quality gates (all offline — no keys, no network; job-system tests also use a real Redis if `redis-server` is installed): `uv run pytest` (≥ 80% coverage enforced),
 `uv run ruff check .`, `uv run mypy`. CI runs these plus a Docker build.
 
 ```bash
-docker compose up --build       # app on 127.0.0.1:8501 + Redis; the UI has no authentication
+docker compose up --build       # app on 127.0.0.1:8501 + worker + Redis; the UI has no authentication
 ```
+
+## Durable runs (`EXECUTION_MODE=queue`)
+
+By default (`inline`) a run lives inside the UI process and dies with it. In `queue` mode the UI only submits and
+watches; separate worker processes do the work through Redis:
+
+```bash
+redis-server &                                                       # or any Redis 6.2+; set REDIS_URL
+EXECUTION_MODE=queue uv run streamlit run app/main.py                # terminal 1
+uv run python -m research_analyst.jobs.worker                        # terminal 2
+```
+
+| Piece | How |
+|---|---|
+| Job queue | Redis Stream + consumer group; every state change and its stream operation happen in one Lua script |
+| Checkpoints | Own LangGraph saver on core Redis commands (no modules needed); passes LangGraph's conformance suite |
+| Crash recovery | Heartbeats; a silent job is taken over with `XAUTOCLAIM` after `JOB_LEASE_SECONDS` and **resumes**: finished sub-questions are not re-run |
+| Fencing | A per-run lease token: a worker that lost it cannot update the run |
+| Poison jobs | Failed and dead-lettered after `JOB_MAX_DELIVERIES` |
+| Stop / deploys | Cancel flag seen by the heartbeat; `SIGTERM` hands the job back at once |
+| Reload | The run id is in the URL (`?run=…`), so a reload or UI restart reattaches |
+
+Checked live once (2026-11-25, real Gemini and web search): a worker was `kill -9`ed with 2 of 4 sub-questions done;
+a second one took over about 11 s later (10 s lease), re-ran only the 2 unfinished ones, and completed the report
+(24 LLM calls in total). One run used about 340 KB of Redis memory.
+
+Limits: delivery is **at-least-once** (an interrupted sub-question is paid for again); the lease does not fence
+checkpoint writes; the LLM rate limiter is still per process, so **run one worker process** (a restarted worker does
+not know what the dead one just spent and can hit 429s); records expire after `RUN_TTL_SECONDS` (7 days), which can
+fill a small (30 MB) Redis after roughly 80 runs, and with `noeviction` new writes then fail, so lower the TTL there.
+Monitor-page process counters stay with the worker.
 
 **Streamlit Community Cloud:** main file `app/main.py`, Python 3.12. Add secrets (top-level or under a section):
 
@@ -167,7 +198,7 @@ LANGFUSE_BASE_URL = "https://us.cloud.langfuse.com"      # your Langfuse region
 TOKEN_BUDGET_PER_RUN = "60000"
 ```
 
-There is no Redis on Cloud (memory features do nothing) and the filesystem is ephemeral (use Langfuse for
+There is no Redis on Cloud (memory features do nothing; keep `EXECUTION_MODE=inline`, a worker cannot run there) and the filesystem is ephemeral (use Langfuse for
 history). `requirements.txt` is generated from `uv.lock` (`uv export --no-dev --no-hashes --no-emit-project`).
 
 Useful settings (see `src/research_analyst/config.py` and `.env.example`): `TOKEN_BUDGET_PER_RUN`,

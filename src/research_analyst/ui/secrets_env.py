@@ -16,6 +16,7 @@ from typing import Any
 _PREFIXES = (
     "GEMINI_", "LANGFUSE_", "LLM_", "TOKEN_", "REDIS_", "CRITIC_", "JUDGE_", "QUERY_", "ARXIV_",
     "DEBATE_", "SEARCH_", "FETCH_", "READER_", "RUN_", "MAX_", "LOG_", "PLANNER_", "SOURCE_", "EVIDENCE_",
+    "EXECUTION_", "QUEUE_", "WORKER_", "JOB_",
 )
 _EXACT = {"ENVIRONMENT", "CACHE_TTL_SECONDS"}
 

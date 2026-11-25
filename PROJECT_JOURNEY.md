@@ -277,6 +277,47 @@ cheapest credibility win was a real A/B. Hence this work.
 
 **Interview questions this adds:** How do you spread load across multiple API keys/accounts safely (and is that within provider terms)? How do you schedule between resources with different remaining budgets? Why count breaker failures per call? How do you keep the secret out of logs/metrics? What is the difference between a per-key and a model-wide failure, and how does your retry policy tell them apart?
 
+### 2026-11-25 — Feature branch `feature/redis-durable-runs`: durable runs on Redis (P0) **(to be merged to main on your instruction)**
+
+**Context [DECIDED — your instructions]:** after a Redis integration analysis you asked to build P0 (queue, workers, durable checkpoints): branch, build, test, commit, merge, push. You added Redis Cloud keys to `.env`.
+
+**Finding:** `REDIS_USER_API_KEY` / `REDIS_ACCOUNT_KEY` are Redis Cloud *management API* keys, not a database connection. A read-only API check showed the account has **no database**. The app needs `REDIS_URL`. Nothing was created in the cloud; everything was verified on a local Redis 8.6.
+
+**What was built** (`jobs/`, `ui/queued.py`; `EXECUTION_MODE=inline` stays the default) [INFERRED — design is mine]
+- Redis Streams job queue with a consumer group; run records as hashes; every state+stream change is one Lua script.
+- Own LangGraph checkpointer on core Redis commands (msgpack with a model allow-list, TTLs, own thread pool).
+- Worker: heartbeat **thread**, lease with random token, `XAUTOCLAIM` takeover, resume from checkpoint, cancel flag, graceful hand-back on SIGTERM, dead-letter after 3 deliveries.
+- UI submits/polls/approves/cancels; run id in the URL so a reload reattaches.
+- Idempotency: report record id derived from the session id; double submit/approve ignored. Token usage is persisted so budgets and totals survive a resume.
+
+**Decisions**
+
+| Decision | Why | Alternative & trade-off |
+|---|---|---|
+| Own checkpointer instead of `langgraph-checkpoint-redis` (changes my earlier recommendation) | the package needs RedisJSON + query engine; Homebrew Redis and `redis:7` lack them; core commands also run on fakeredis | ~270 lines I must maintain; mitigated by LangGraph's conformance suite (all base capabilities pass; no copy/prune extensions) |
+| Streams, hand-written | long jobs need heartbeats and takeover; `arq` is maintenance-only | Celery/Taskiq: less code, less control with 15-minute async jobs |
+| Heartbeat in a thread | a full default executor (LLM calls sleeping on rate limits) or busy loop must not expire the lease | a coroutine is simpler but starvable |
+| Application errors are not retried; only worker death / Redis errors redeliver | LLM layer already retries; re-running a failing run burns quota | automatic job retry |
+| Resume decided from the checkpoint, not the job | one code path for first attempt and redelivery | storing a cursor in the job duplicates truth |
+
+**Verification [MEASURED]**
+- 438 offline tests, 92% coverage; job and checkpointer tests run on fakeredis **and** a real server; a test `kill -9`s a real worker process.
+- Live run (real Gemini, web search): plan 4.6 s; killed worker at 2/4 branches (11 calls, 7.5k tokens spent); second worker took over after ~11 s (10 s lease); the 2 finished branches ran once, the 2 unfinished ran again; complete report, 24 calls, 27.4k tokens, 67 s, judge 19 supported / 5 partial / 0 unsupported of 24. About 340 KB Redis memory for the run. n=1.
+
+**Bugs found**
+1. Live run: `Cannot send a request, as the client has been closed` — two parallel first calls each built a Gemini client; the discarded one was closed while in use. Pre-existing. Fixed with a lock (test failed before the fix).
+2. Live run: the UI showed only the last attempt's elapsed time after a resume. Fixed (wall clock from first research start).
+3. CI's mypy step was already failing on `main` (`react_traces` missing in two scripts). Fixed by a shared `new_research_state`.
+
+**Still open [not done]**
+- Rate limiter is per process (P1): run ONE worker. Seen live: the replacement worker got two 429s because it did not know what the dead one had just spent.
+- Stop / takeover cannot interrupt LLM calls already queued in threads.
+- At-least-once: an interrupted branch is paid for twice; checkpoint writes are not fenced by the lease.
+- Redis memory: ~80 runs fill 30 MB within the 7-day TTL.
+- Docker/Compose changes not run locally (no Docker); not tested against a hosted Redis.
+
+**Interview questions this adds:** Why Streams over Pub/Sub or lists? What delivery guarantee do you have and where can a duplicate happen? How does a worker know it is a zombie, and what can it still write? Why is resume cheap in LangGraph (pending writes)? Why did you write a checkpointer, and how do you know it is correct? How do you test crash recovery?
+
 ### NEXT — when the paid key arrives (plan, not yet done)
 1. Smoke-test both features live on one query (`SEARCH_MODE=react`), read the Langfuse trace of a ReAct run.
 2. **A/B:** `run_eval --queries 5 --configs no_debate,react` (≥3 runs each for variance); report faithfulness, completeness, tokens, calls, time.

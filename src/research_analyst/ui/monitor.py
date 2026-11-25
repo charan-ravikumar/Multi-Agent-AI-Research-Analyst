@@ -119,7 +119,8 @@ def _counters() -> None:
     retried = metrics.by_label("structured_retry", "agent")
     if retried:
         st.caption("Structured answers that needed a corrective re-ask: " + ", ".join(f"{a} ×{int(n)}" for a, n in sorted(retried.items())))
-    st.caption(f"Counters cover this process only ({int(metrics.uptime_s() // 60)} min since start) and reset on restart.")
+    where = " In queue mode the model calls happen in the worker, so these stay at zero here." if settings.execution_mode == "queue" else ""
+    st.caption(f"Counters cover this process only ({int(metrics.uptime_s() // 60)} min since start) and reset on restart.{where}")
 
 
 def render_monitor() -> None:

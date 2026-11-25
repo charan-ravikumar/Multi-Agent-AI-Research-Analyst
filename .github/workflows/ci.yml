@@ -8,6 +8,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:                      # the job-system tests also run against a real server
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -17,8 +23,10 @@ jobs:
         run: uv run ruff check .
       - name: Type check
         run: uv run mypy
-      - name: Offline tests (no network, no API keys, no Redis)
+      - name: Offline tests (no network, no API keys)
         run: uv run pytest
+        env:
+          TEST_REDIS_URL: redis://127.0.0.1:6379/0
 
   docker:
     runs-on: ubuntu-latest

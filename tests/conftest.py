@@ -36,11 +36,13 @@ os.environ["LLM_QUOTA_FILE"] = os.path.join(_TMP, "llm_quota.json")
 os.environ["GEMINI_STRONG_AGENTS"] = "writer"
 os.environ["JUDGE_MODEL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"   # unreachable on purpose
+os.environ["EXECUTION_MODE"] = "inline"          # job-system tests build their own store/worker
 
 import fakeredis  # noqa: E402
 import pytest  # noqa: E402
 
 
+from tests import redis_backends  # noqa: E402
 from tests.helpers import FakeLLM, initial_state  # noqa: E402,F401
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -52,6 +54,25 @@ def fake_redis(monkeypatch):
     client = fakeredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(rs, "_client", client)
     return client
+
+
+@pytest.fixture(scope="session")
+def real_redis_url():
+    yield from redis_backends.server_url()
+
+
+@pytest.fixture(params=["fake", "real"])
+def backend(request):
+    """Job-system tests run on fakeredis and, when a server is available, on a real Redis too."""
+    if request.param == "fake":
+        yield redis_backends.fake_backend()
+        return
+    url = request.getfixturevalue("real_redis_url")
+    if not url:
+        pytest.skip("no redis-server available")
+    real = redis_backends.real_backend(url)
+    yield real
+    redis_backends.cleanup(real)
 
 
 @pytest.fixture(autouse=True)

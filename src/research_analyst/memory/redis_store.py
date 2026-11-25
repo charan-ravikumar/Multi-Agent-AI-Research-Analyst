@@ -34,6 +34,7 @@ def get_client() -> redis.Redis:
             settings.redis_url,
             decode_responses=True,
             socket_connect_timeout=5,
+            socket_timeout=5,       # a hung server must not stall the plan or memory node
         )
         _client.ping()          # fail fast if Redis is unreachable
         logger.debug("Redis connected: %s", settings.redis_url)
@@ -114,11 +115,15 @@ def save_report_record(
     Strips markdown headers from final_report and stores the first 500
     characters as an executive summary.
 
-    Returns the generated report_id (UUID4 string).
+    Returns the report_id (a UUID string, stable per session).
     Raises redis.RedisError if the Redis connection is unavailable.
     """
     r = get_client()
-    report_id = str(uuid.uuid4())
+    # Derived from the run, so a node that is re-run after a crash overwrites its record instead of adding one.
+    if session_id and session_id != "unknown":
+        report_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"report:{session_id}"))
+    else:
+        report_id = str(uuid.uuid4())
     now = time.time()
 
     # Strip markdown headers for a cleaner plain-text summary

@@ -39,7 +39,8 @@ def phase_done() -> None:
         C.render_verify(payload["claims"], payload["evidence"], key="live", verdicts=payload["verdicts"])
 
     snap = progress.snapshot(st.session_state.get("session_id", ""))
-    C.render_run_summary(state.get("usage_summary") or {}, snap["elapsed_s"] if snap else None)
+    C.render_run_summary(state.get("usage_summary") or {},
+                         snap["elapsed_s"] if snap else st.session_state.get("run_elapsed_s"))
 
     C.render_react_traces(state.get("react_traces") or [])
 

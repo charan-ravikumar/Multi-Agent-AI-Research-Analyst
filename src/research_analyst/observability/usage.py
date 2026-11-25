@@ -111,6 +111,18 @@ class UsageTracker:
             out["estimated_cost_usd"] = None
         return out
 
+    def export(self, session_id: str) -> dict | None:
+        """A JSON-serialisable copy of a run's counters, so another process (or a later attempt) can continue them."""
+        with self._lock:
+            e = self._s.get(session_id)
+            return json.loads(json.dumps(e)) if e else None
+
+    def restore(self, session_id: str, exported: dict) -> None:
+        """Replace a run's counters with an ``export``; the token budget then covers earlier attempts too."""
+        with self._lock:
+            entry = self._entry(session_id)
+            entry.update(json.loads(json.dumps(exported)))
+
     def pop(self, session_id: str) -> None:
         with self._lock:
             self._s.pop(session_id, None)

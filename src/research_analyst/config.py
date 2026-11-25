@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -93,6 +95,18 @@ class Settings(BaseSettings):
     # ── Redis (only memory layer) ─────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
     cache_ttl_seconds: int = 3600
+
+    # ── Execution ──────────────────────────────────────────────────────────────
+    # "inline": research runs inside the UI process (no Redis needed; state is lost on restart).
+    # "queue":  the UI submits jobs to Redis and `python -m research_analyst.jobs.worker` runs them; runs survive
+    #           restarts and resume from their checkpoint.  Needs Redis 6.2+ (core commands only).
+    execution_mode: Literal["inline", "queue"] = "inline"
+    queue_namespace: str = "ra"                  # key prefix, so several environments can share one Redis
+    run_ttl_seconds: int = 7 * 24 * 3600         # run records and checkpoints expire after this long untouched
+    worker_concurrency: int = 2                  # stages one worker process runs at once
+    job_lease_seconds: float = 30.0              # a job silent for this long is taken over by another worker
+    job_heartbeat_seconds: float = 0.7           # lease renewal + progress publishing interval
+    job_max_deliveries: int = 3                  # then the run is failed and dead-lettered
 
     # ── Web search / scraping ─────────────────────────────────────────────────
     search_max_results: int = 10

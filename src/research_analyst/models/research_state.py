@@ -143,3 +143,14 @@ class ResearchState(TypedDict):
     related_past_reports: NotRequired[list[dict]]
 
 
+
+
+def new_research_state(session_id: str, query: str, *, review_rounds: int = 0,
+                       auto_approve_plan: bool = False) -> ResearchState:
+    """The empty state a run starts from.  ``auto_approve_plan=False`` keeps the human checkpoint."""
+    return ResearchState(
+        session_id=session_id, query=query, research_plan=None, sub_questions=[], react_traces=[],
+        search_results=[], failed_sub_questions=[], extracted_facts=[], citations=[], contradictions=[],
+        unresolved_gaps=[], gap_items=[], draft=[], final_report="", iteration=0, routing_history=[],
+        auto_approve_plan=auto_approve_plan, review_rounds=review_rounds,
+    )

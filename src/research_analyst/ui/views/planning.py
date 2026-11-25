@@ -16,29 +16,13 @@ def phase_planning() -> None:
     asyncio.run() is safe here: Streamlit does not hold a running event loop
     between script reruns (verified against 1.58.0).
     """
-    from research_analyst.models import ResearchState  # noqa: PLC0415
+    from research_analyst.models.research_state import new_research_state  # noqa: PLC0415
 
     st.markdown(f"**Query:** {st.session_state.query}")
 
     with st.spinner("Generating research plan — this takes around 20–60 seconds…"):
-        initial = ResearchState(
-            session_id=st.session_state.session_id,
-            query=st.session_state.query,
-            research_plan=None,
-            sub_questions=[],
-            react_traces=[],
-            search_results=[],
-            failed_sub_questions=[],
-            extracted_facts=[],
-            citations=[],
-            contradictions=[],
-            unresolved_gaps=[],
-            gap_items=[],
-            draft=[],
-            final_report="",
-            iteration=0,
-            routing_history=[],
-            auto_approve_plan=False,   # human checkpoint must fire
+        initial = new_research_state(
+            st.session_state.session_id, st.session_state.query,
             review_rounds=st.session_state.get("review_rounds", 0),
         )
         cfg = {"configurable": {"thread_id": st.session_state.thread_id}}
